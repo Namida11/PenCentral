@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import json
-import re
 import threading
 from pathlib import Path
 
 from . import db
 from . import pipeline
-from .preview import guess_url, host_from, live_status, resolve_ips, screenshot_url
+from .preview import guess_url, host_from, live_status, resolve_ips
 from .sourceaudit import run_source_audit
 from .utils import add_log_sink, log, remove_log_sink, stamp, unique_lines, write_lines
 
@@ -35,33 +34,20 @@ def ingest_file(scan_id: int, category: str, path: Path, severity: str = "info")
 
 
 def enrich_previews(scan_id: int, target: str, outdir: Path, live_file: Path) -> None:
-    shots = ROOT / "data" / "shots" / str(scan_id)
-    shots.mkdir(parents=True, exist_ok=True)
-    (outdir / "shots").mkdir(parents=True, exist_ok=True)
-
     findings = db.get_findings(scan_id)
-    taken = 0
     for item in findings:
         if item["category"] not in {"subs", "probe"}:
             continue
         guessed = item.get("url") or guess_url(item["title"], target)
         host = host_from(guessed or item["title"])
         live_url, code = live_status(guessed or host)
-        url = live_url or guessed
-        ip = resolve_ips(host)
-        fields = {"url": url, "ip": ip, "http_status": code}
-        safe = re.sub(r"[^a-zA-Z0-9._-]+", "_", host or str(item["id"]))
-        shot_path = shots / f"{item['id']}_{safe}.png"
-        if taken < 40 and not item.get("screenshot"):
-            ok = screenshot_url(url, shot_path) if url else False
-            if not ok and live_url and live_url != url:
-                ok = screenshot_url(live_url, shot_path)
-            if ok:
-                rel = shot_path.relative_to(ROOT)
-                fields["screenshot"] = str(rel).replace("\\", "/")
-                taken += 1
+        fields = {
+            "url": live_url or guessed,
+            "ip": resolve_ips(host),
+            "http_status": code,
+        }
         db.update_finding(item["id"], **fields)
-    db.add_log(scan_id, "ok", f"Preview: {taken} screenshot, IP-lər yazıldı")
+    db.add_log(scan_id, "ok", "URL / IP / status yazıldı")
 
 
 def _parse_line(category: str, line: str, default_sev: str) -> tuple[str, str, str]:
@@ -103,7 +89,7 @@ def _parse_line(category: str, line: str, default_sev: str) -> tuple[str, str, s
 
 
 def adapt_scan(scan_id: int) -> None:
-    """Köhnə scan-ə yeni sahələr: url, IP, screenshot."""
+    """Köhnə scan-ə url, IP, status."""
     scan = db.get_scan(scan_id)
     if not scan:
         return
@@ -116,7 +102,7 @@ def adapt_scan(scan_id: int) -> None:
         if item["category"] in {"subs", "probe"}:
             urls.append(item.get("url") or guess_url(item["title"], target))
     write_lines(live, [u for u in urls if u])
-    db.add_log(scan_id, "step", "Köhnə scan uyğunlaşdırılır (IP + şəkil)")
+    db.add_log(scan_id, "step", "Köhnə scan uyğunlaşdırılır (URL / IP / status)")
     db.update_scan(scan_id, status="adapting", current_stage="preview")
     try:
         enrich_previews(scan_id, target, outdir, live)
@@ -215,7 +201,7 @@ def _execute(scan_id: int) -> None:
             db.add_log(scan_id, "ok", f"{len(items)} source tapıntı")
 
         db.update_scan(scan_id, current_stage="preview")
-        db.add_log(scan_id, "step", "IP + web görüntü")
+        db.add_log(scan_id, "step", "URL / IP / status")
         enrich_previews(scan_id, target, outdir, live)
 
         if "nuclei" in stages:

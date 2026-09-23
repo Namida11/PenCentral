@@ -10,7 +10,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from modules import db
-from modules.preview import guess_url, host_from, resolve_ips, screenshot_url
+from modules.preview import guess_url, host_from
 from modules.runner import start_adapt, start_scan
 from modules.utils import which
 
@@ -79,9 +79,6 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith("/api/scans/") and path.endswith("/export.csv"):
             sid = _id_from(path, "/api/scans/", "/export.csv")
             return self._export(sid, "csv")
-        if path.startswith("/api/findings/") and path.endswith("/shot"):
-            fid = _id_from(path, "/api/findings/", "/shot")
-            return self._shot(fid)
         if path.startswith("/api/scans/") and path.endswith("/findings"):
             sid = _id_from(path, "/api/scans/", "/findings")
             if sid is None or not db.get_scan(sid):
@@ -210,30 +207,6 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _shot(self, fid: int | None) -> None:
-        if fid is None:
-            return self._err(400, "id yoxdur")
-        item = db.get_finding(fid)
-        if not item:
-            return self._err(404, "Tapıntı yoxdur")
-        raw = Path(item.get("screenshot") or "")
-        path = raw if raw.is_absolute() else (ROOT / raw if str(raw) else None)
-        path = path.resolve() if path and str(raw) else None
-        if path is None or not path.is_file():
-            folder = ROOT / "data" / "shots" / str(item.get("scan_id") or "")
-            if folder.is_dir():
-                hits = sorted(folder.glob(f"{fid}_*.png")) + sorted(folder.glob("*.png"))
-                path = hits[0].resolve() if hits else None
-        if path is None:
-            return self._err(404, "Screenshot yoxdur")
-        allowed = (OUTPUT.resolve(), (ROOT / "data").resolve(), ROOT.resolve())
-        if not any(str(path).startswith(str(a)) for a in allowed):
-            return self._err(403, "Forbidden")
-        if not path.is_file():
-            return self._err(404, "Fayl yoxdur")
-        data = path.read_bytes()
-        self._send(200, data, "image/png")
-
     def _demo(self) -> None:
         sid = db.create_scan("demo.local", ["subs", "probe", "ports", "dirs", "nuclei"], None)
         db.update_scan(sid, status="done", current_stage="done")
@@ -254,14 +227,12 @@ class Handler(BaseHTTPRequestHandler):
             ("nuclei", "[medium] expired TLS certificate", "demo.local", "medium"),
             ("nuclei", "[low] missing security header", "x-frame-options", "low"),
         ]
-        demo_shot = ROOT / "data" / "demo_example.png"
-        if not demo_shot.exists():
-            screenshot_url("https://example.com", demo_shot)
         for cat, title, detail, sev in samples:
             url = guess_url(title, "demo.local")
             ip = "203.0.113.10" if cat in {"subs", "probe"} else ""
-            shot = str(demo_shot) if cat in {"subs", "probe"} and demo_shot.exists() else ""
-            db.add_finding(sid, cat, title, detail, sev, url=url, ip=ip, screenshot=shot)
+            fid = db.add_finding(sid, cat, title, detail, sev, url=url, ip=ip)
+            if cat == "subs" and "www" in title:
+                db.add_note(fid, "nümunə qeyd: login səhifəsi")
         db.add_log(sid, "ok", "Demo data yükləndi — real target deyil")
         self._json(200, {"id": sid})
 

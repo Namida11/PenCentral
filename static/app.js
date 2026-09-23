@@ -169,22 +169,21 @@ async function loadFindings(fromServer = false) {
     $("#findings").innerHTML = items
       .map((it) => {
         const url = it.url || guessFrontUrl(it.title);
-        const shot = `/api/findings/${it.id}/shot`;
         const host = hostOf(it);
         const code = statusOf(it);
         const notes = it.notes && it.notes.length ? it.notes : (it.note ? [{ text: it.note }] : []);
         return `
-        <article class="card-item" data-id="${it.id}" data-url="${escAttr(url)}" data-title="${escAttr(host)}" data-ip="${escAttr(it.ip || "")}" data-shot="${shot}">
-          <img class="thumb" src="${shot}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'thumb empty',textContent:'görüntü yoxdur'}))" />
-          <div class="card-body">
+        <article class="host-row" data-id="${it.id}">
+          <div class="hostline">
             <label class="chk"><input type="checkbox" class="rev" ${it.reviewed ? "checked" : ""} /> baxdım</label>
-            <div class="hostline">
-              <a class="open" href="${escAttr(url)}" target="_blank" rel="noopener">${esc(host)}</a>
-              <span class="code c${esc(code || "0")}">${esc(code || "-")}</span>
-            </div>
-            <div class="ip">${esc(it.ip || "IP yoxdur")}</div>
-            <ul class="note-list">${notes.map((n) => `<li>${esc(n.text || n)}</li>`).join("")}</ul>
-            <button type="button" class="ghost slim add-note">Qeyd əlavə et</button>
+            <a class="open" href="${escAttr(url)}" target="_blank" rel="noopener">${esc(host)}</a>
+            <span class="code c${esc(code || "0")}">${esc(code || "-")}</span>
+            <span class="ip">${esc(it.ip || "")}</span>
+          </div>
+          <ul class="note-list">${notes.map((n) => `<li>${esc(n.text || n)}</li>`).join("")}</ul>
+          <div class="note-add">
+            <input class="note-input" placeholder="Qeyd yaz..." />
+            <button type="button" class="ghost slim add-note">Əlavə et</button>
           </div>
         </article>`;
       })
@@ -210,7 +209,7 @@ async function loadFindings(fromServer = false) {
 
   $$("#findings .rev").forEach((box) => {
     box.addEventListener("change", async () => {
-      const id = box.closest(".row, .card-item").dataset.id;
+      const id = box.closest(".row, .host-row").dataset.id;
       await api(`/api/findings/${id}/review`, {
         method: "POST",
         body: JSON.stringify({ reviewed: box.checked }),
@@ -218,31 +217,34 @@ async function loadFindings(fromServer = false) {
       loadScans();
     });
   });
-  $$("#findings .card-item").forEach((card) => {
-    card.addEventListener("click", (ev) => {
-      if (ev.target.closest("a, input, label")) return;
-      openDrawer(card.dataset);
-    });
-  });
   $$("#findings .add-note").forEach((btn) => {
     btn.addEventListener("click", async (ev) => {
       ev.stopPropagation();
-      const wrap = btn.closest(".row, .card-item");
+      const wrap = btn.closest(".row, .host-row");
       const id = wrap.dataset.id;
-      const text = prompt("Qeyd:");
-      if (!text || !text.trim()) return;
+      const inp = wrap.querySelector(".note-input");
+      const text = (inp && inp.value ? inp.value : "").trim();
+      if (!text) return;
       const created = await api(`/api/findings/${id}/notes`, {
         method: "POST",
-        body: JSON.stringify({ text: text.trim() }),
+        body: JSON.stringify({ text }),
       });
       const row = findingsCache.find((x) => String(x.id) === String(id));
       if (row) {
         row.notes = row.notes || [];
         row.notes.push(created);
-        row.note = (row.note ? row.note + " | " : "") + text.trim();
       }
+      if (inp) inp.value = "";
       window.__pcPaint = "";
       loadFindings(false);
+    });
+  });
+  $$("#findings .note-input").forEach((inp) => {
+    inp.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        inp.parentElement.querySelector(".add-note").click();
+      }
     });
   });
   renderNotesTable();
@@ -368,27 +370,6 @@ function guessFrontUrl(title) {
   if (t.startsWith("http://") || t.startsWith("https://")) return t;
   return t ? `https://${t}` : "#";
 }
-
-function openDrawer(ds) {
-  $("#drawer-title").textContent = ds.title || "";
-  $("#drawer-meta").textContent = ds.ip ? `IP: ${ds.ip}` : "IP tapılmadı";
-  $("#drawer-link").href = ds.url || "#";
-  const img = $("#drawer-img");
-  if (ds.shot) {
-    img.hidden = false;
-    img.src = ds.shot;
-  } else {
-    img.hidden = true;
-    img.removeAttribute("src");
-  }
-  $("#drawer").hidden = false;
-}
-$("#drawer-close").addEventListener("click", () => {
-  $("#drawer").hidden = true;
-});
-$("#drawer").addEventListener("click", (e) => {
-  if (e.target.id === "drawer") $("#drawer").hidden = true;
-});
 
 function esc(s) {
   return String(s)
