@@ -1,0 +1,2 @@
+# UI üçün xarici paket lazım deyil (Python stdlib).
+# Sistem alətləri: subfinder, httpx, naabu və ya nmap, ffuf, nuclei.

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PenCentral</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">PC</div>
+      <div>
+        <h1>PenCentral</h1>
+        <p>İcazəli recon paneli</p>
+      </div>
+    </div>
+
+    <form id="scan-form" class="card form">
+      <label>Target
+        <input name="target" placeholder="icazeli-target.com" required />
+      </label>
+
+      <div class="mods">
+        <label class="chk"><input type="checkbox" name="stage" value="subs" checked /> Subdomain</label>
+        <label class="chk"><input type="checkbox" name="stage" value="probe" checked /> Live / httpx</label>
+        <label class="chk"><input type="checkbox" name="stage" value="ports" checked /> Port scan</label>
+        <label class="chk"><input type="checkbox" name="stage" value="dirs" /> Directory enum</label>
+        <label class="chk"><input type="checkbox" name="stage" value="nuclei" checked /> Nuclei</label>
+      </div>
+
+      <label>Wordlist (dir enum)
+        <input name="wordlist" placeholder="/usr/share/seclists/.../common.txt" />
+      </label>
+
+      <label class="chk auth">
+        <input type="checkbox" name="authorized" required />
+        Bu target üçün yazılı icazəm var
+      </label>
+
+      <button type="submit" id="start-btn">Scan başlat</button>
+      <button type="button" id="demo-btn" class="ghost">UI demo tapıntı yüklə</button>
+    </form>
+
+    <div class="tools card" id="tools"></div>
+
+    <div class="history">
+      <h2>Scan-lər</h2>
+      <div id="scan-list"></div>
+    </div>
+  </aside>
+
+  <main>
+    <header class="top">
+      <div>
+        <h2 id="scan-title">Scan seç</h2>
+        <p id="scan-meta" class="muted">Soldan yeni scan başlat və ya mövcuduna kliklə.</p>
+      </div>
+      <div class="pills" id="progress-pills"></div>
+    </header>
+
+    <section class="stats" id="stats"></section>
+
+    <nav class="tabs" id="tabs">
+      <button data-cat="" class="on">Hamısı</button>
+      <button data-cat="subs">Subdomain</button>
+      <button data-cat="probe">Live</button>
+      <button data-cat="ports">Port</button>
+      <button data-cat="dirs">Directory</button>
+      <button data-cat="nuclei">Nuclei</button>
+    </nav>
+
+    <div class="toolbar">
+      <input id="filter" placeholder="Axtar..." />
+      <label class="chk"><input type="checkbox" id="only-open" /> Yalnız baxılmamış</label>
+      <a class="dl" id="dl-txt" href="#" download>Siyahını yüklə (.txt)</a>
+      <a class="dl" id="dl-csv" href="#" download>CSV</a>
+      <span class="muted" id="count-label"></span>
+    </div>
+
+    <div id="findings" class="list"></div>
+
+    <div id="drawer" class="drawer" hidden>
+      <div class="drawer-card">
+        <button type="button" id="drawer-close" class="ghost">Bağla</button>
+        <h3 id="drawer-title"></h3>
+        <p class="muted" id="drawer-meta"></p>
+        <p>
+          <a id="drawer-link" target="_blank" rel="noopener">Sayta keç →</a>
+        </p>
+        <img id="drawer-img" alt="web görüntü" />
+      </div>
+    </div>
+
+    <section class="log-wrap">
+      <h3>Log</h3>
+      <pre id="logs"></pre>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
