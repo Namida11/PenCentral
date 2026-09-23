@@ -179,10 +179,14 @@ main { padding: 22px 28px; overflow: auto; }
   font-size: 11px; padding: 2px 6px; border-radius: 999px;
   background: #243040; color: var(--muted);
 }
-.code.c200, .code.c201, .code.c204 { background: #1c3a22; color: var(--low); }
-.code.c301, .code.c302, .code.c307 { background: #3a3114; color: var(--med); }
-.code.c401, .code.c403 { background: #3d2414; color: var(--high); }
-.code.c404, .code.c500, .code.c502, .code.c503 { background: #3d1420; color: var(--crit); }
+.code.c2, .code.c200, .code.c201, .code.c204 { background: #1c3a22; color: var(--low); }
+.code.c3, .code.c301, .code.c302, .code.c307, .code.c308 { background: #3a3114; color: var(--med); }
+.code.c4, .code.c400, .code.c401, .code.c403, .code.c404 { background: #3d2414; color: var(--high); }
+.code.c5, .code.c500, .code.c502, .code.c503 { background: #3d1420; color: var(--crit); }
+#status-filter {
+  background: #0e141b; color: var(--text); border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px 8px;
+}
 .note-list { margin: 8px 0 6px; padding-left: 16px; color: var(--text); font-size: 12px; }
 .note-list:empty { display: none; }
 .ip { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--muted); }

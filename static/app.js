@@ -7,6 +7,7 @@ let category = "";
 let pollTimer = null;
 let findingsCache = [];
 let findingsTick = 0;
+let statusFilter = "";
 
 const CATS = ["subs", "probe", "ports", "dirs", "source", "nuclei"];
 const CAT_LABEL = {
@@ -152,6 +153,11 @@ async function loadFindings(fromServer = false) {
   const onlyOpen = $("#only-open").checked;
   items = items.filter((it) => {
     if (category && it.category !== category) return false;
+    if (statusFilter) {
+      const st = statusOf(it);
+      if (statusFilter === "empty" && st) return false;
+      if (statusFilter !== "empty" && st !== statusFilter) return false;
+    }
     if (onlyOpen && it.reviewed) return false;
     if (!qtext) return true;
     return (it.title + " " + (it.detail || "") + " " + (it.note || "") + " " + (it.ip || "")).toLowerCase().includes(qtext);
@@ -177,7 +183,7 @@ async function loadFindings(fromServer = false) {
           <div class="hostline">
             <label class="chk"><input type="checkbox" class="rev" ${it.reviewed ? "checked" : ""} /> baxdım</label>
             <a class="open" href="${escAttr(url)}" target="_blank" rel="noopener">${esc(host)}</a>
-            <span class="code c${esc(code || "0")}">${esc(code || "-")}</span>
+            <span class="code c${esc(code || "0")} c${esc((code || "0")[0])}">${esc(code || "-")}</span>
             <span class="ip">${esc(it.ip || "")}</span>
           </div>
           <ul class="note-list">${notes.map((n) => `<li>${esc(n.text || n)}</li>`).join("")}</ul>
@@ -364,6 +370,11 @@ $("#copy-notes").addEventListener("click", async () => {
 });
 $("#filter").addEventListener("input", () => loadFindings(false));
 $("#only-open").addEventListener("change", () => loadFindings(false));
+$("#status-filter").addEventListener("change", (e) => {
+  statusFilter = e.target.value;
+  window.__pcPaint = "";
+  loadFindings(false);
+});
 
 function guessFrontUrl(title) {
   const t = String(title || "").trim().split(/\s+/)[0];

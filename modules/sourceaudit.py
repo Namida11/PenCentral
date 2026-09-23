@@ -106,7 +106,76 @@ NOISE_DOMAINS = {
     "mc.yandex.ru",
     "tiktok.com",
     "bytespider",
+    "openstreetmap.org",
+    "openstreetmap.fr",
+    "openstreetmap.de",
+    "osm.org",
+    "osmfoundation.org",
+    "tile.openstreetmap.org",
+    "nominatim.openstreetmap.org",
+    "maps.googleapis.com",
+    "maps.gstatic.com",
+    "maps.google.com",
+    "www.google.com",
+    "google.com.az",
+    "googleadservices.com",
+    "googletagmanager.com",
+    "www.gstatic.com",
+    "ssl.gstatic.com",
+    "www.google-analytics.com",
+    "region1.google-analytics.com",
+    "www.recaptcha.net",
+    "www.gstatic.com",
+    "leafletjs.com",
+    "unpkg.com",
+    "cdn.jsdelivr.net",
+    "maxcdn.bootstrapcdn.com",
+    "use.fontawesome.com",
+    "kit.fontawesome.com",
+    "cdnjs.cloudflare.com",
+    "ajax.googleapis.com",
+    "code.jquery.com",
+    "stackpath.bootstrapcdn.com",
+    "polyfill.io",
+    "cdn.polyfill.io",
+    "www.paypal.com",
+    "www.paypalobjects.com",
+    "static.cloudflareinsights.com",
+    "challenges.cloudflare.com",
+    "www.googletagmanager.com",
+    "www.googleadservices.com",
+    "pagead2.googlesyndication.com",
+    "tpc.googlesyndication.com",
+    "adservice.google.com",
+    "www.youtube.com",
+    "www.youtube-nocookie.com",
+    "i.ytimg.com",
+    "player.vimeo.com",
+    "vimeo.com",
+    "www.reddit.com",
+    "www.pinterest.com",
+    "api.mapbox.com",
+    "events.mapbox.com",
+    "tiles.mapbox.com",
 }
+
+NOISE_PARTS = (
+    "google",
+    "gstatic",
+    "doubleclick",
+    "openstreetmap",
+    "osm.org",
+    "recaptcha",
+    "googleapis",
+    "googletag",
+    "facebook",
+    "fbcdn",
+    "cloudflare",
+    "jsdelivr",
+    "fontawesome",
+    "bootstrapcdn",
+    "gravatar",
+)
 
 # (name, severity, regex)
 RULES: list[tuple[str, str, re.Pattern[str]]] = [
@@ -170,6 +239,27 @@ RULES: list[tuple[str, str, re.Pattern[str]]] = [
         "low",
         re.compile(r"[a-z0-9]{3,24}\.blob\.core\.windows\.net", re.I),
     ),
+    (
+        "Password assignment",
+        "high",
+        re.compile(
+            r"""(?:password|passwd|pwd|db_pass|db_password)\s*[:=]\s*['"][^'"]{4,}['"]""",
+            re.I,
+        ),
+    ),
+    (
+        "Bearer / Authorization",
+        "high",
+        re.compile(r"""(?:bearer|authorization)\s*[:=]\s*['"][^'"]{12,}['"]""", re.I),
+    ),
+    (
+        "Connection string",
+        "critical",
+        re.compile(
+            r"(?:mongodb(?:\+srv)?|postgres(?:ql)?|mysql|redis|amqp):\/\/[^\s'\"\\]+",
+            re.I,
+        ),
+    ),
 ]
 
 
@@ -211,10 +301,12 @@ def _internal_ip(ip: str) -> bool:
 
 def _is_noise(host: str) -> bool:
     host = host.lower().rstrip(".")
+    if host in NOISE_DOMAINS:
+        return True
     for n in NOISE_DOMAINS:
-        if host == n or host.endswith("." + n):
+        if host.endswith("." + n):
             return True
-    return False
+    return any(part in host for part in NOISE_PARTS)
 
 
 def _call_hosts(text: str) -> list[tuple[str, str]]:
