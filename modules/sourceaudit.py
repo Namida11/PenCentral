@@ -32,6 +32,21 @@ HOST_RE = re.compile(
     r"(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,24}"
 )
 IPV4_RE = re.compile(r"\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d?\d)\b")
+# JS-dən real sorğu ünvanı: fetch/axios/ajax və ya https://host/...
+CALL_URL_RE = re.compile(
+    r"""(?:
+            (?:fetch|axios|ajax|http)\s*\(\s*['"](https?://[^'"]+)['"]
+          | (?:baseURL|baseUrl|apiUrl|apiURL|endpoint|paymentUrl|paymentURL|checkoutUrl)
+            \s*[:=]\s*['"](https?://[^'"]+)['"]
+          | ['"](https?://[^'"]+)['"]
+          | ['"](wss://[^'"]+)['"]
+        )""",
+    re.I | re.X,
+)
+STATIC_EXT = (
+    ".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp",
+    ".woff", ".woff2", ".ttf", ".eot", ".map", ".mp4", ".webm",
+)
 
 NOISE_DOMAINS = {
     "googleapis.com",
@@ -62,6 +77,35 @@ NOISE_DOMAINS = {
     "cookiebot.com",
     "googlesyndication.com",
     "doubleclick.net",
+    "fonts.googleapis.com",
+    "fonts.gstatic.com",
+    "fontawesome.com",
+    "bootstrapcdn.com",
+    "gravatar.com",
+    "wp.com",
+    "twimg.com",
+    "fbcdn.net",
+    "cdninstagram.com",
+    "akamaihd.net",
+    "cloudfront.net",
+    "googleadservices.com",
+    "googletagservices.com",
+    "recaptcha.net",
+    "g.doubleclick.net",
+    "connect.facebook.net",
+    "static.xx.fbcdn.net",
+    "apple.com",
+    "mzstatic.com",
+    "microsoft.com",
+    "office.com",
+    "live.com",
+    "clarity.ms",
+    "bing.com",
+    "yandex.ru",
+    "yandex.net",
+    "mc.yandex.ru",
+    "tiktok.com",
+    "bytespider",
 }
 
 # (name, severity, regex)
@@ -165,6 +209,33 @@ def _internal_ip(ip: str) -> bool:
     return False
 
 
+def _is_noise(host: str) -> bool:
+    host = host.lower().rstrip(".")
+    for n in NOISE_DOMAINS:
+        if host == n or host.endswith("." + n):
+            return True
+    return False
+
+
+def _call_hosts(text: str) -> list[tuple[str, str]]:
+    found: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for m in CALL_URL_RE.finditer(text or ""):
+        raw = next((g for g in m.groups() if g), "")
+        raw = raw.strip()
+        if not raw:
+            continue
+        path = urlparse(raw).path.lower()
+        if any(path.endswith(ext) for ext in STATIC_EXT):
+            continue
+        host = (urlparse(raw).hostname or "").lower()
+        if not host or host in seen:
+            continue
+        seen.add(host)
+        found.append((host, raw))
+    return found
+
+
 def _clip(value: str, n: int = 180) -> str:
     value = re.sub(r"\s+", " ", value).strip()
     return value if len(value) <= n else value[: n - 1] + "…"
@@ -197,17 +268,14 @@ def analyze_text(text: str, source_url: str, root_domain: str) -> list[dict]:
             add("secret", name, _clip(m.group(0)), sev)
 
     root = root_domain.lower().rstrip(".")
-    for host in HOST_RE.findall(text):
-        host = host.lower().rstrip(".")
-        if host.endswith(".js") or host.endswith(".css"):
-            continue
-        base = ".".join(host.split(".")[-2:])
-        if any(host == n or host.endswith("." + n) for n in NOISE_DOMAINS):
+    for host, raw_url in _call_hosts(text):
+        if _is_noise(host):
             continue
         if host == root or host.endswith("." + root):
-            add("domain", f"In-scope host: {host}", host, "info")
-        elif base not in {"com", "net", "org", "io", "az", "ru"}:
-            add("domain", f"External host: {host}", host, "low")
+            add("domain", f"Target host: {host}", _clip(raw_url), "info")
+        else:
+            # test.com JS-i payment.hello.az-a sorğu atır
+            add("domain", f"Sorğu gedir: {host}", _clip(raw_url), "medium")
 
     for ip in IPV4_RE.findall(text):
         if _internal_ip(ip):
