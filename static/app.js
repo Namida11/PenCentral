@@ -7,7 +7,6 @@ let category = "";
 let pollTimer = null;
 let findingsCache = [];
 let findingsTick = 0;
-let hostPageId = null;
 
 const CATS = ["subs", "probe", "ports", "dirs", "source", "nuclei"];
 const CAT_LABEL = {
@@ -94,9 +93,7 @@ async function openScan(id) {
   currentId = id;
   lastLogId = 0;
   findingsCache = [];
-  hostPageId = null;
   window.__pcPaint = "";
-  showHostPage(false);
   $("#logs").textContent = "";
   $("#dl-txt").href = `/api/scans/${id}/export.txt`;
   $("#dl-csv").href = `/api/scans/${id}/export.csv`;
@@ -163,7 +160,6 @@ async function loadFindings(fromServer = false) {
   const paintKey = items.map((i) => `${i.id}:${i.screenshot || ""}:${i.http_status || ""}:${(i.notes||[]).length}:${i.reviewed || 0}:${category}`).join("|");
   if (window.__pcPaint === paintKey) {
     renderNotesTable();
-    if (hostPageId) fillHostPage();
     return;
   }
   window.__pcPaint = paintKey;
@@ -180,11 +176,14 @@ async function loadFindings(fromServer = false) {
         <article class="host-row" data-id="${it.id}">
           <div class="hostline">
             <label class="chk"><input type="checkbox" class="rev" ${it.reviewed ? "checked" : ""} /> baxdım</label>
-            <button type="button" class="open host-open">${esc(host)}</button>
+            <a class="open" href="${escAttr(url)}" target="_blank" rel="noopener">${esc(host)}</a>
             <span class="code c${esc(code || "0")}">${esc(code || "-")}</span>
             <span class="ip">${esc(it.ip || "")}</span>
-            <span class="muted">${notes.length} qeyd</span>
-            <a class="open" href="${escAttr(url)}" target="_blank" rel="noopener">link</a>
+          </div>
+          <ul class="note-list">${notes.map((n) => `<li>${esc(n.text || n)}</li>`).join("")}</ul>
+          <div class="note-add">
+            <input class="note-input" placeholder="Qeyd yaz..." />
+            <button type="button" class="ghost slim add-note">Əlavə et</button>
           </div>
         </article>`;
       })
@@ -218,41 +217,37 @@ async function loadFindings(fromServer = false) {
       loadScans();
     });
   });
-  $$("#findings .host-open").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = Number(btn.closest(".host-row").dataset.id);
-      openHostPage(id);
+  $$("#findings .add-note").forEach((btn) => {
+    btn.addEventListener("click", async (ev) => {
+      ev.stopPropagation();
+      const wrap = btn.closest(".row, .host-row");
+      const id = wrap.dataset.id;
+      const inp = wrap.querySelector(".note-input");
+      const text = (inp && inp.value ? inp.value : "").trim();
+      if (!text) return;
+      const created = await api(`/api/findings/${id}/notes`, {
+        method: "POST",
+        body: JSON.stringify({ text }),
+      });
+      const row = findingsCache.find((x) => String(x.id) === String(id));
+      if (row) {
+        row.notes = row.notes || [];
+        row.notes.push(created);
+      }
+      if (inp) inp.value = "";
+      window.__pcPaint = "";
+      loadFindings(false);
+    });
+  });
+  $$("#findings .note-input").forEach((inp) => {
+    inp.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        inp.parentElement.querySelector(".add-note").click();
+      }
     });
   });
   renderNotesTable();
-  if (hostPageId) fillHostPage();
-}
-
-function showHostPage(on) {
-  const page = $("#host-page");
-  if (!page) return;
-  page.hidden = !on;
-  $("#findings").hidden = on;
-  $("#tabs").hidden = on;
-  $(".toolbar").hidden = on;
-}
-
-function openHostPage(id) {
-  hostPageId = id;
-  showHostPage(true);
-  fillHostPage();
-}
-
-function fillHostPage() {
-  const it = findingsCache.find((x) => String(x.id) === String(hostPageId));
-  if (!it) return;
-  const url = it.url || guessFrontUrl(it.title);
-  const host = hostOf(it);
-  const notes = it.notes && it.notes.length ? it.notes : (it.note ? [{ text: it.note }] : []);
-  $("#host-title").textContent = host;
-  $("#host-meta").textContent = `${statusOf(it) || "status yox"} · ${it.ip || "IP yoxdur"}`;
-  $("#host-link").href = url;
-  $("#host-notes").innerHTML = notes.map((n) => `<li>${esc(n.text || n)}</li>`).join("") || `<li class="muted">Hələ qeyd yoxdur</li>`;
 }
 
 function hostOf(it) {
@@ -357,29 +352,6 @@ $("#demo-btn").addEventListener("click", async () => {
 });
 $("#adapt-btn").addEventListener("click", adaptScan);
 $("#delete-btn").addEventListener("click", () => deleteScan(currentId));
-$("#host-back").addEventListener("click", () => {
-  hostPageId = null;
-  showHostPage(false);
-});
-$("#host-note-add").addEventListener("click", async () => {
-  if (!hostPageId) return;
-  const inp = $("#host-note-text");
-  const text = (inp.value || "").trim();
-  if (!text) return;
-  const created = await api(`/api/findings/${hostPageId}/notes`, {
-    method: "POST",
-    body: JSON.stringify({ text }),
-  });
-  const row = findingsCache.find((x) => String(x.id) === String(hostPageId));
-  if (row) {
-    row.notes = row.notes || [];
-    row.notes.push(created);
-  }
-  inp.value = "";
-  window.__pcPaint = "";
-  fillHostPage();
-  renderNotesTable();
-});
 $("#copy-notes").addEventListener("click", async () => {
   const md = notesMarkdown();
   try {
