@@ -18,6 +18,27 @@ const CAT_LABEL = {
   nuclei: "Nuclei",
 };
 
+async function deleteScan(id) {
+  if (!id) return;
+  if (!confirm(`Scan #${id} silinsin?`)) return;
+  await api(`/api/scans/${id}`, { method: "DELETE" });
+  if (currentId === id) {
+    currentId = null;
+    findingsCache = [];
+    $("#findings").innerHTML = "";
+    $("#scan-title").textContent = "Scan seç";
+    renderNotesTable();
+  }
+  await loadScans();
+}
+
+async function adaptScan() {
+  if (!currentId) return alert("Əvvəl scan seç");
+  await api(`/api/scans/${currentId}/adapt`, { method: "POST", body: "{}" });
+  window.__pcPaint = "";
+  await refreshScan();
+}
+
 async function api(path, opts) {
   const res = await fetch(path, {
     headers: { "Content-Type": "application/json" },
@@ -47,14 +68,24 @@ async function loadScans() {
   $("#scan-list").innerHTML = scans
     .map(
       (s) => `
-      <button class="scan-item ${s.id === currentId ? "active" : ""}" data-id="${s.id}">
+      <div class="scan-item ${s.id === currentId ? "active" : ""}" data-id="${s.id}">
         <b>${esc(s.target)}</b>
         <small>#${s.id} · ${s.status} · ${s.reviewed}/${s.findings} baxılıb</small>
-      </button>`
+        <button type="button" class="ghost del" data-del="${s.id}">sil</button>
+      </div>`
     )
     .join("") || `<p class="muted">Hələ scan yoxdur</p>`;
   $$("#scan-list .scan-item").forEach((b) =>
-    b.addEventListener("click", () => openScan(Number(b.dataset.id)))
+    b.addEventListener("click", (ev) => {
+      if (ev.target.closest("[data-del]")) return;
+      openScan(Number(b.dataset.id));
+    })
+  );
+  $$("#scan-list [data-del]").forEach((b) =>
+    b.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      deleteScan(Number(b.dataset.del));
+    })
   );
 }
 
@@ -287,6 +318,8 @@ $("#demo-btn").addEventListener("click", async () => {
     alert(err.message);
   }
 });
+$("#adapt-btn").addEventListener("click", adaptScan);
+$("#delete-btn").addEventListener("click", () => deleteScan(currentId));
 $("#copy-notes").addEventListener("click", async () => {
   const md = notesMarkdown();
   try {

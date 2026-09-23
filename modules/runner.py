@@ -97,6 +97,35 @@ def _parse_line(category: str, line: str, default_sev: str) -> tuple[str, str, s
     return title, detail, sev
 
 
+def adapt_scan(scan_id: int) -> None:
+    """Köhnə scan-ə yeni sahələr: url, IP, screenshot."""
+    scan = db.get_scan(scan_id)
+    if not scan:
+        return
+    target = scan["target"]
+    outdir = OUTPUT / target.replace("/", "_") / f"adapt_{scan_id}"
+    outdir.mkdir(parents=True, exist_ok=True)
+    live = outdir / "live_urls.txt"
+    urls = []
+    for item in db.get_findings(scan_id):
+        if item["category"] in {"subs", "probe"}:
+            urls.append(item.get("url") or guess_url(item["title"], target))
+    write_lines(live, [u for u in urls if u])
+    db.add_log(scan_id, "step", "Köhnə scan uyğunlaşdırılır (IP + şəkil)")
+    db.update_scan(scan_id, status="adapting", current_stage="preview")
+    try:
+        enrich_previews(scan_id, target, outdir, live)
+        db.update_scan(scan_id, status="done", current_stage="done")
+        db.add_log(scan_id, "ok", "Uyğunlaşdırma bitdi")
+    except Exception as exc:
+        db.update_scan(scan_id, status="error", error=str(exc))
+        db.add_log(scan_id, "err", f"Adapt xəta: {exc}")
+
+
+def start_adapt(scan_id: int) -> None:
+    threading.Thread(target=adapt_scan, args=(scan_id,), daemon=True).start()
+
+
 def start_scan(scan_id: int) -> None:
     global _current_thread
     t = threading.Thread(target=_execute, args=(scan_id,), daemon=True)

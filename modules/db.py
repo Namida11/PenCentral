@@ -87,6 +87,19 @@ def create_scan(target: str, stages: list[str], wordlist: str | None) -> int:
         return sid
 
 
+def delete_scan(scan_id: int) -> bool:
+    with _lock:
+        con = connect()
+        row = con.execute("SELECT id FROM scans WHERE id=?", (scan_id,)).fetchone()
+        if not row:
+            return False
+        con.execute("DELETE FROM findings WHERE scan_id=?", (scan_id,))
+        con.execute("DELETE FROM logs WHERE scan_id=?", (scan_id,))
+        con.execute("DELETE FROM scans WHERE id=?", (scan_id,))
+        con.commit()
+        return True
+
+
 def update_scan(scan_id: int, **fields) -> None:
     if not fields:
         return

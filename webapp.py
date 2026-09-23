@@ -4,13 +4,14 @@
 from __future__ import annotations
 
 import json
+import shutil
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from modules import db
 from modules.preview import guess_url, host_from, resolve_ips, screenshot_url
-from modules.runner import start_scan
+from modules.runner import start_adapt, start_scan
 from modules.utils import which
 
 ROOT = Path(__file__).resolve().parent
@@ -122,11 +123,30 @@ class Handler(BaseHTTPRequestHandler):
                 return self._err(400, "id yoxdur")
             db.set_reviewed(fid, bool(body.get("reviewed")), body.get("note"))
             return self._json(200, {"ok": True})
+        if path.startswith("/api/scans/") and path.endswith("/adapt"):
+            sid = _id_from(path, "/api/scans/", "/adapt")
+            if sid is None or not db.get_scan(sid):
+                return self._err(404, "Scan yoxdur")
+            start_adapt(sid)
+            return self._json(200, {"ok": True, "id": sid})
         if path.startswith("/api/findings/") and path.endswith("/note"):
             fid = _id_from(path, "/api/findings/", "/note")
             if fid is None:
                 return self._err(400, "id yoxdur")
             db.set_note(fid, str(body.get("note") or ""))
+            return self._json(200, {"ok": True})
+        self._err(404, "Not found")
+
+    def do_DELETE(self) -> None:
+        path = urlparse(self.path).path
+        if path.startswith("/api/scans/"):
+            sid = _id_from(path, "/api/scans/", "")
+            if sid is None or not db.get_scan(sid):
+                return self._err(404, "Scan yoxdur")
+            db.delete_scan(sid)
+            shot_dir = ROOT / "data" / "shots" / str(sid)
+            if shot_dir.exists():
+                shutil.rmtree(shot_dir, ignore_errors=True)
             return self._json(200, {"ok": True})
         self._err(404, "Not found")
 
