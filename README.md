@@ -65,7 +65,8 @@ python3 webapp.py
 
 Aç: http://127.0.0.1:8080
 
-- Solda modul checkbox-ları: subdomain, live, port, directory, nuclei
+- Solda modul checkbox-ları: subdomain, live, port, directory, source analiz, nuclei
+- Source tab: HTML/JS/source-map içindən Google/Firebase key, secret, daxili IP, domain
 - Directory enum üçün wordlist yolu
 - «yazılı icazəm var» işarəsi olmadan scan getmir
 - Sağda tapıntılar görünür — severity, qeyd, **baxdım** checkbox

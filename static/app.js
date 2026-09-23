@@ -8,12 +8,13 @@ let pollTimer = null;
 let findingsCache = [];
 let findingsTick = 0;
 
-const CATS = ["subs", "probe", "ports", "dirs", "nuclei"];
+const CATS = ["subs", "probe", "ports", "dirs", "source", "nuclei"];
 const CAT_LABEL = {
   subs: "Subdomain",
   probe: "Live",
   ports: "Port",
   dirs: "Directory",
+  source: "Source",
   nuclei: "Nuclei",
 };
 

@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parent
 OUTPUT = ROOT / "output"
 
 STATIC = Path(__file__).resolve().parent / "static"
-VALID_STAGES = {"subs", "probe", "ports", "dirs", "nuclei"}
+VALID_STAGES = {"subs", "probe", "ports", "dirs", "source", "nuclei"}
 TOOLS = ["subfinder", "assetfinder", "httpx", "naabu", "nmap", "ffuf", "feroxbuster", "nuclei"]
 MIME = {
     ".html": "text/html; charset=utf-8",
@@ -209,6 +209,10 @@ class Handler(BaseHTTPRequestHandler):
             ("ports", "203.0.113.10:22", "ssh", "low"),
             ("dirs", "https://www.demo.local/admin", "status 302", "low"),
             ("dirs", "https://dev.demo.local/.git/HEAD", "status 200", "medium"),
+            ("source", "Google API key", "AIzaSy•••••••• (nümunə) @ https://www.demo.local/app.js", "high"),
+            ("source", "Firebase URL", "demo-local.firebaseio.com @ https://www.demo.local/app.js", "medium"),
+            ("source", "Daxili IP", "10.0.4.12 @ https://api.demo.local/main.js", "medium"),
+            ("source", "In-scope host", "internal-api.demo.local @ https://www.demo.local/app.js", "info"),
             ("nuclei", "[medium] expired TLS certificate", "demo.local", "medium"),
             ("nuclei", "[low] missing security header", "x-frame-options", "low"),
         ]

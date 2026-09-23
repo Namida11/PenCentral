@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 import threading
 from pathlib import Path
 
 from . import db
 from . import pipeline
 from .preview import guess_url, host_from, resolve_ips, screenshot_url
+from .sourceaudit import run_source_audit
 from .utils import add_log_sink, log, remove_log_sink, stamp, unique_lines, write_lines
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -157,6 +159,26 @@ def _execute(scan_id: int) -> None:
             dirs = pipeline.run_dirs(live, outdir, wordlist)
             n = ingest_file(scan_id, "dirs", dirs)
             db.add_log(scan_id, "ok", f"{n} directory")
+
+        if "source" in stages:
+            db.update_scan(scan_id, current_stage="source")
+            db.add_log(scan_id, "step", "Source code analiz (hər live subdomain)")
+            seed = unique_lines(live) or [f"https://{target}"]
+            report = run_source_audit(seed, target, outdir)
+            try:
+                items = json.loads(report.read_text(encoding="utf-8"))
+            except Exception:
+                items = []
+            for item in items:
+                db.add_finding(
+                    scan_id,
+                    "source",
+                    item.get("title") or "source",
+                    item.get("detail") or "",
+                    item.get("severity") or "info",
+                    url=item.get("url") or "",
+                )
+            db.add_log(scan_id, "ok", f"{len(items)} source tapıntı")
 
         db.update_scan(scan_id, current_stage="preview")
         db.add_log(scan_id, "step", "IP + web görüntü")
