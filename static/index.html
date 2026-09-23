@@ -86,12 +86,25 @@
 
     <div id="findings" class="list"></div>
 
+    <section id="host-page" class="host-page" hidden>
+      <button type="button" id="host-back" class="ghost slim">← Subdomain siyahısı</button>
+      <h2 id="host-title">Host</h2>
+      <p class="muted" id="host-meta"></p>
+      <p><a id="host-link" target="_blank" rel="noopener">Sayta keç →</a></p>
+      <div class="host-notes-box">
+        <h3>Bu hostun qeydləri</h3>
+        <ul id="host-notes" class="note-list"></ul>
+        <textarea id="host-note-text" rows="4" placeholder="Qeyd yaz..."></textarea>
+        <button type="button" id="host-note-add" class="ghost slim">Qeyd əlavə et</button>
+      </div>
+    </section>
+
     <section class="notes-wrap">
       <div class="notes-head">
-        <h3>Qeydlər</h3>
+        <h3>Ümumi review</h3>
         <button type="button" id="copy-notes" class="ghost">Cədvəli kopyala</button>
       </div>
-      <p class="muted" id="notes-empty">Subdomain kartında qeyd yaz — burada cədvəl yaranacaq.</p>
+      <p class="muted" id="notes-empty">Host səhifəsində qeyd yaz — burada ümumi review yaranır.</p>
       <div class="table-scroll">
         <table id="notes-table">
           <thead>
