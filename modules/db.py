@@ -68,9 +68,21 @@ def init() -> None:
             """
         )
         cols = {r[1] for r in con.execute("PRAGMA table_info(findings)")}
-        for name in ("url", "ip", "screenshot"):
+        for name in ("url", "ip", "screenshot", "http_status"):
             if name not in cols:
                 con.execute(f"ALTER TABLE findings ADD COLUMN {name} TEXT DEFAULT ''")
+        con.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                finding_id INTEGER NOT NULL,
+                text TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY(finding_id) REFERENCES findings(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_notes_finding ON notes(finding_id);
+            """
+        )
         con.commit()
 
 
@@ -93,6 +105,10 @@ def delete_scan(scan_id: int) -> bool:
         row = con.execute("SELECT id FROM scans WHERE id=?", (scan_id,)).fetchone()
         if not row:
             return False
+        con.execute(
+            "DELETE FROM notes WHERE finding_id IN (SELECT id FROM findings WHERE scan_id=?)",
+            (scan_id,),
+        )
         con.execute("DELETE FROM findings WHERE scan_id=?", (scan_id,))
         con.execute("DELETE FROM logs WHERE scan_id=?", (scan_id,))
         con.execute("DELETE FROM scans WHERE id=?", (scan_id,))
@@ -186,7 +202,29 @@ def set_note(finding_id: int, note: str) -> None:
         con = connect()
         con.execute("UPDATE findings SET note=? WHERE id=?", (note, finding_id))
         con.commit()
-        pass
+
+
+def add_note(finding_id: int, text: str) -> dict:
+    text = (text or "").strip()
+    with _lock:
+        con = connect()
+        cur = con.execute(
+            "INSERT INTO notes(finding_id, text) VALUES (?,?)",
+            (finding_id, text),
+        )
+        con.commit()
+        nid = int(cur.lastrowid)
+        row = con.execute("SELECT * FROM notes WHERE id=?", (nid,)).fetchone()
+        return dict(row) if row else {"id": nid, "finding_id": finding_id, "text": text}
+
+
+def list_notes(finding_id: int) -> list[dict]:
+    con = connect()
+    rows = con.execute(
+        "SELECT * FROM notes WHERE finding_id=? ORDER BY id",
+        (finding_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
 
 
 def list_scans() -> list[dict]:
@@ -229,7 +267,24 @@ def get_findings(scan_id: int, category: str | None = None) -> list[dict]:
             "SELECT * FROM findings WHERE scan_id=? ORDER BY id",
             (scan_id,),
         ).fetchall()
-    return [dict(r) for r in rows]
+    items = [dict(r) for r in rows]
+    if not items:
+        return items
+    ids = [it["id"] for it in items]
+    qmarks = ",".join("?" * len(ids))
+    notes = con.execute(
+        f"SELECT * FROM notes WHERE finding_id IN ({qmarks}) ORDER BY id",
+        ids,
+    ).fetchall()
+    by: dict[int, list] = {}
+    for n in notes:
+        by.setdefault(n["finding_id"], []).append(dict(n))
+    for it in items:
+        extra = by.get(it["id"], [])
+        it["notes"] = extra
+        if not (it.get("note") or "").strip() and extra:
+            it["note"] = " | ".join(x["text"] for x in extra)
+    return items
 
 
 def get_logs(scan_id: int, after_id: int = 0) -> list[dict]:

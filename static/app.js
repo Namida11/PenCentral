@@ -157,7 +157,7 @@ async function loadFindings(fromServer = false) {
     return (it.title + " " + (it.detail || "") + " " + (it.note || "") + " " + (it.ip || "")).toLowerCase().includes(qtext);
   });
   $("#count-label").textContent = `${items.length} sətir`;
-  const paintKey = items.map((i) => `${i.id}:${i.screenshot || ""}:${i.reviewed || 0}:${category}`).join("|");
+  const paintKey = items.map((i) => `${i.id}:${i.screenshot || ""}:${i.http_status || ""}:${(i.notes||[]).length}:${i.reviewed || 0}:${category}`).join("|");
   if (window.__pcPaint === paintKey) {
     renderNotesTable();
     return;
@@ -169,15 +169,22 @@ async function loadFindings(fromServer = false) {
     $("#findings").innerHTML = items
       .map((it) => {
         const url = it.url || guessFrontUrl(it.title);
-        const shot = it.screenshot ? `/api/findings/${it.id}/shot` : "";
+        const shot = `/api/findings/${it.id}/shot`;
+        const host = hostOf(it);
+        const code = statusOf(it);
+        const notes = it.notes && it.notes.length ? it.notes : (it.note ? [{ text: it.note }] : []);
         return `
-        <article class="card-item" data-id="${it.id}" data-url="${escAttr(url)}" data-title="${escAttr(it.title)}" data-ip="${escAttr(it.ip || "")}" data-shot="${shot}">
-          ${shot ? `<img class="thumb" src="${shot}" alt="" />` : `<div class="thumb empty">görüntü yoxdur</div>`}
+        <article class="card-item" data-id="${it.id}" data-url="${escAttr(url)}" data-title="${escAttr(host)}" data-ip="${escAttr(it.ip || "")}" data-shot="${shot}">
+          <img class="thumb" src="${shot}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'thumb empty',textContent:'görüntü yoxdur'}))" />
           <div class="card-body">
             <label class="chk"><input type="checkbox" class="rev" ${it.reviewed ? "checked" : ""} /> baxdım</label>
-            <div><a class="open" href="${escAttr(url)}" target="_blank" rel="noopener">${esc(it.title)}</a></div>
+            <div class="hostline">
+              <a class="open" href="${escAttr(url)}" target="_blank" rel="noopener">${esc(host)}</a>
+              <span class="code c${esc(code || "0")}">${esc(code || "-")}</span>
+            </div>
             <div class="ip">${esc(it.ip || "IP yoxdur")}</div>
-            <input class="note" placeholder="qeyd yaz..." value="${escAttr(it.note || "")}" />
+            <ul class="note-list">${notes.map((n) => `<li>${esc(n.text || n)}</li>`).join("")}</ul>
+            <button type="button" class="ghost slim add-note">Qeyd əlavə et</button>
           </div>
         </article>`;
       })
@@ -217,28 +224,51 @@ async function loadFindings(fromServer = false) {
       openDrawer(card.dataset);
     });
   });
-  $$("#findings .note").forEach((inp) => {
-    inp.addEventListener("change", async () => {
-      const wrap = inp.closest(".row, .card-item");
+  $$("#findings .add-note").forEach((btn) => {
+    btn.addEventListener("click", async (ev) => {
+      ev.stopPropagation();
+      const wrap = btn.closest(".row, .card-item");
       const id = wrap.dataset.id;
-      await api(`/api/findings/${id}/note`, {
+      const text = prompt("Qeyd:");
+      if (!text || !text.trim()) return;
+      const created = await api(`/api/findings/${id}/notes`, {
         method: "POST",
-        body: JSON.stringify({ note: inp.value }),
+        body: JSON.stringify({ text: text.trim() }),
       });
       const row = findingsCache.find((x) => String(x.id) === String(id));
-      if (row) row.note = inp.value;
-      renderNotesTable();
+      if (row) {
+        row.notes = row.notes || [];
+        row.notes.push(created);
+        row.note = (row.note ? row.note + " | " : "") + text.trim();
+      }
+      window.__pcPaint = "";
+      loadFindings(false);
     });
   });
   renderNotesTable();
 }
 
+function hostOf(it) {
+  const raw = (it.url || it.title || "").trim();
+  return raw.replace(/^https?:\/\//, "").split("/")[0].split()[0];
+}
+function statusOf(it) {
+  if (it.http_status) return String(it.http_status);
+  const m = String(it.detail || it.title || "").match(/\[(\d{3})\]/);
+  return m ? m[1] : "";
+}
+
 function notesRows() {
-  return findingsCache.filter(
-    (it) =>
-      (it.category === "subs" || it.category === "probe") &&
-      String(it.note || "").trim()
-  );
+  const out = [];
+  for (const it of findingsCache) {
+    if (it.category !== "subs" && it.category !== "probe") continue;
+    const notes = it.notes && it.notes.length ? it.notes.map((n) => n.text || n) : [];
+    if (!notes.length && String(it.note || "").trim()) notes.push(it.note);
+    for (const text of notes) {
+      if (String(text).trim()) out.push({ ...it, note: text });
+    }
+  }
+  return out;
 }
 
 function mdCell(s) {

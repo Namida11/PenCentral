@@ -7,7 +7,7 @@ from pathlib import Path
 
 from . import db
 from . import pipeline
-from .preview import guess_url, host_from, resolve_ips, screenshot_url
+from .preview import guess_url, host_from, live_status, resolve_ips, screenshot_url
 from .sourceaudit import run_source_audit
 from .utils import add_log_sink, log, remove_log_sink, stamp, unique_lines, write_lines
 
@@ -44,14 +44,19 @@ def enrich_previews(scan_id: int, target: str, outdir: Path, live_file: Path) ->
     for item in findings:
         if item["category"] not in {"subs", "probe"}:
             continue
-        url = item.get("url") or guess_url(item["title"], target)
-        host = host_from(url or item["title"])
+        guessed = item.get("url") or guess_url(item["title"], target)
+        host = host_from(guessed or item["title"])
+        live_url, code = live_status(guessed or host)
+        url = live_url or guessed
         ip = resolve_ips(host)
-        fields = {"url": url, "ip": ip}
+        fields = {"url": url, "ip": ip, "http_status": code}
         safe = re.sub(r"[^a-zA-Z0-9._-]+", "_", host or str(item["id"]))
-        shot_path = shots / f"{safe}.png"
-        if taken < 24 and not item.get("screenshot"):
-            if screenshot_url(url, shot_path):
+        shot_path = shots / f"{item['id']}_{safe}.png"
+        if taken < 40 and not item.get("screenshot"):
+            ok = screenshot_url(url, shot_path) if url else False
+            if not ok and live_url and live_url != url:
+                ok = screenshot_url(live_url, shot_path)
+            if ok:
                 rel = shot_path.relative_to(ROOT)
                 fields["screenshot"] = str(rel).replace("\\", "/")
                 taken += 1

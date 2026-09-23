@@ -164,6 +164,18 @@ main { padding: 22px 28px; overflow: auto; }
 }
 .card-body { padding: 10px; }
 .card-body a { color: var(--accent); text-decoration: none; word-break: break-all; }
+.hostline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px; padding: 2px 6px; border-radius: 999px;
+  background: #243040; color: var(--muted);
+}
+.code.c200, .code.c201, .code.c204 { background: #1c3a22; color: var(--low); }
+.code.c301, .code.c302, .code.c307 { background: #3a3114; color: var(--med); }
+.code.c401, .code.c403 { background: #3d2414; color: var(--high); }
+.code.c404, .code.c500, .code.c502, .code.c503 { background: #3d1420; color: var(--crit); }
+.note-list { margin: 8px 0 6px; padding-left: 16px; color: var(--text); font-size: 12px; }
+.note-list:empty { display: none; }
 .ip { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--muted); }
 .drawer {
   position: fixed; inset: 0; background: rgba(0,0,0,.62);

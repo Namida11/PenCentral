@@ -134,4 +134,38 @@ def screenshot_url(url: str, dest: Path, timeout: int = 25) -> bool:
             continue
         if dest.exists() and dest.stat().st_size > 500:
             return True
+        fallback = Path.cwd() / "screenshot.png"
+        if fallback.exists() and fallback.stat().st_size > 500:
+            fallback.replace(dest)
+            return dest.exists() and dest.stat().st_size > 500
     return False
+
+
+def live_status(url_or_host: str) -> tuple[str, str]:
+    """Qaytarır (işləyən url, status kod)."""
+    from urllib.request import Request, urlopen
+    import ssl
+
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    host = host_from(url_or_host)
+    candidates = []
+    if str(url_or_host).startswith("http"):
+        candidates.append(url_or_host.strip().split()[0])
+    if host:
+        candidates.extend([f"https://{host}", f"http://{host}"])
+    seen = set()
+    for url in candidates:
+        if url in seen:
+            continue
+        seen.add(url)
+        req = Request(url, headers={"User-Agent": "PenCentral/1.0"}, method="GET")
+        try:
+            with urlopen(req, timeout=8, context=ctx) as resp:
+                return url, str(getattr(resp, "status", 200))
+        except Exception as exc:
+            code = getattr(exc, "code", None)
+            if code:
+                return url, str(code)
+    return (candidates[0] if candidates else ""), ""

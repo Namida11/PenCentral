@@ -129,6 +129,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self._err(404, "Scan yoxdur")
             start_adapt(sid)
             return self._json(200, {"ok": True, "id": sid})
+        if path.startswith("/api/findings/") and path.endswith("/notes"):
+            fid = _id_from(path, "/api/findings/", "/notes")
+            if fid is None:
+                return self._err(400, "id yoxdur")
+            text = str(body.get("text") or body.get("note") or "").strip()
+            if not text:
+                return self._err(400, "Qeyd boşdur")
+            note = db.add_note(fid, text)
+            return self._json(200, note)
         if path.startswith("/api/findings/") and path.endswith("/note"):
             fid = _id_from(path, "/api/findings/", "/note")
             if fid is None:
@@ -205,11 +214,18 @@ class Handler(BaseHTTPRequestHandler):
         if fid is None:
             return self._err(400, "id yoxdur")
         item = db.get_finding(fid)
-        if not item or not item.get("screenshot"):
+        if not item:
+            return self._err(404, "Tapıntı yoxdur")
+        raw = Path(item.get("screenshot") or "")
+        path = raw if raw.is_absolute() else (ROOT / raw if str(raw) else None)
+        path = path.resolve() if path and str(raw) else None
+        if path is None or not path.is_file():
+            folder = ROOT / "data" / "shots" / str(item.get("scan_id") or "")
+            if folder.is_dir():
+                hits = sorted(folder.glob(f"{fid}_*.png")) + sorted(folder.glob("*.png"))
+                path = hits[0].resolve() if hits else None
+        if path is None:
             return self._err(404, "Screenshot yoxdur")
-        raw = Path(item["screenshot"])
-        path = raw if raw.is_absolute() else (ROOT / raw)
-        path = path.resolve()
         allowed = (OUTPUT.resolve(), (ROOT / "data").resolve(), ROOT.resolve())
         if not any(str(path).startswith(str(a)) for a in allowed):
             return self._err(403, "Forbidden")
