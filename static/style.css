@@ -196,6 +196,15 @@ main { padding: 22px 28px; overflow: auto; }
   background: #0e141b; border: 1px solid var(--line);
   color: var(--text); border-radius: 6px; padding: 6px 8px; font-size: 12px;
 }
+.notes-wrap { margin-top: 22px; }
+.notes-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.table-scroll { overflow: auto; border: 1px solid var(--line); border-radius: 10px; margin-top: 8px; }
+#notes-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+#notes-table th, #notes-table td {
+  text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line);
+  word-break: break-all;
+}
+#notes-table th { color: var(--muted); font-weight: 600; }
 .log-wrap { margin-top: 22px; }
 pre#logs {
   background: #070b10; border: 1px solid var(--line); border-radius: 10px;

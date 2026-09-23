@@ -187,8 +187,10 @@ class Handler(BaseHTTPRequestHandler):
         item = db.get_finding(fid)
         if not item or not item.get("screenshot"):
             return self._err(404, "Screenshot yoxdur")
-        path = Path(item["screenshot"]).resolve()
-        allowed = (OUTPUT.resolve(), (ROOT / "data").resolve())
+        raw = Path(item["screenshot"])
+        path = raw if raw.is_absolute() else (ROOT / raw)
+        path = path.resolve()
+        allowed = (OUTPUT.resolve(), (ROOT / "data").resolve(), ROOT.resolve())
         if not any(str(path).startswith(str(a)) for a in allowed):
             return self._err(403, "Forbidden")
         if not path.is_file():

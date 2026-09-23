@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import threading
 from pathlib import Path
 
@@ -34,14 +35,12 @@ def ingest_file(scan_id: int, category: str, path: Path, severity: str = "info")
 
 
 def enrich_previews(scan_id: int, target: str, outdir: Path, live_file: Path) -> None:
-    shots = outdir / "shots"
+    shots = ROOT / "data" / "shots" / str(scan_id)
     shots.mkdir(parents=True, exist_ok=True)
-    live_urls = unique_lines(live_file) if live_file.exists() else []
-    live_hosts = {host_from(u) for u in live_urls}
+    (outdir / "shots").mkdir(parents=True, exist_ok=True)
 
     findings = db.get_findings(scan_id)
     taken = 0
-    max_shots = 30
     for item in findings:
         if item["category"] not in {"subs", "probe"}:
             continue
@@ -49,11 +48,12 @@ def enrich_previews(scan_id: int, target: str, outdir: Path, live_file: Path) ->
         host = host_from(url or item["title"])
         ip = resolve_ips(host)
         fields = {"url": url, "ip": ip}
-        want_shot = taken < 24
-        shot_path = shots / f"{host or item['id']}.png"
-        if want_shot and not item.get("screenshot"):
+        safe = re.sub(r"[^a-zA-Z0-9._-]+", "_", host or str(item["id"]))
+        shot_path = shots / f"{safe}.png"
+        if taken < 24 and not item.get("screenshot"):
             if screenshot_url(url, shot_path):
-                fields["screenshot"] = str(shot_path)
+                rel = shot_path.relative_to(ROOT)
+                fields["screenshot"] = str(rel).replace("\\", "/")
                 taken += 1
         db.update_finding(item["id"], **fields)
     db.add_log(scan_id, "ok", f"Preview: {taken} screenshot, IP-lər yazıldı")

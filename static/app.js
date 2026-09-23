@@ -62,6 +62,7 @@ async function openScan(id) {
   currentId = id;
   lastLogId = 0;
   findingsCache = [];
+  window.__pcPaint = "";
   $("#logs").textContent = "";
   $("#dl-txt").href = `/api/scans/${id}/export.txt`;
   $("#dl-csv").href = `/api/scans/${id}/export.csv`;
@@ -125,6 +126,12 @@ async function loadFindings(fromServer = false) {
     return (it.title + " " + (it.detail || "") + " " + (it.note || "") + " " + (it.ip || "")).toLowerCase().includes(qtext);
   });
   $("#count-label").textContent = `${items.length} sətir`;
+  const paintKey = items.map((i) => `${i.id}:${i.screenshot || ""}:${i.reviewed || 0}:${category}`).join("|");
+  if (window.__pcPaint === paintKey) {
+    renderNotesTable();
+    return;
+  }
+  window.__pcPaint = paintKey;
   const visual = !category || category === "subs" || category === "probe";
   if (visual) {
     $("#findings").className = "cards";
@@ -139,6 +146,7 @@ async function loadFindings(fromServer = false) {
             <label class="chk"><input type="checkbox" class="rev" ${it.reviewed ? "checked" : ""} /> baxdım</label>
             <div><a class="open" href="${escAttr(url)}" target="_blank" rel="noopener">${esc(it.title)}</a></div>
             <div class="ip">${esc(it.ip || "IP yoxdur")}</div>
+            <input class="note" placeholder="qeyd yaz..." value="${escAttr(it.note || "")}" />
           </div>
         </article>`;
       })
@@ -180,13 +188,61 @@ async function loadFindings(fromServer = false) {
   });
   $$("#findings .note").forEach((inp) => {
     inp.addEventListener("change", async () => {
-      const id = inp.closest(".row").dataset.id;
+      const wrap = inp.closest(".row, .card-item");
+      const id = wrap.dataset.id;
       await api(`/api/findings/${id}/note`, {
         method: "POST",
         body: JSON.stringify({ note: inp.value }),
       });
+      const row = findingsCache.find((x) => String(x.id) === String(id));
+      if (row) row.note = inp.value;
+      renderNotesTable();
     });
   });
+  renderNotesTable();
+}
+
+function notesRows() {
+  return findingsCache.filter(
+    (it) =>
+      (it.category === "subs" || it.category === "probe") &&
+      String(it.note || "").trim()
+  );
+}
+
+function mdCell(s) {
+  return String(s || "").replaceAll("|", "\\|").replaceAll("\n", " ").trim();
+}
+
+function notesMarkdown() {
+  const rows = notesRows();
+  const lines = ["| Host | URL | Qeyd |", "| ---- | --- | ---- |"];
+  for (const it of rows) {
+    const host = (it.title || "").split(/\s+/)[0].replace(/^https?:\/\//, "").split("/")[0];
+    const url = it.url || guessFrontUrl(it.title);
+    lines.push(`| ${mdCell(host)} | ${mdCell(url)} | ${mdCell(it.note)} |`);
+  }
+  return lines.join("\n");
+}
+
+function renderNotesTable() {
+  const rows = notesRows();
+  const empty = $("#notes-empty");
+  const tb = $("#notes-table tbody");
+  if (!tb) return;
+  if (!rows.length) {
+    empty.hidden = false;
+    tb.innerHTML = "";
+    return;
+  }
+  empty.hidden = true;
+  tb.innerHTML = rows
+    .map((it) => {
+      const host = (it.title || "").split(/\s+/)[0].replace(/^https?:\/\//, "").split("/")[0];
+      const url = it.url || guessFrontUrl(it.title);
+      return `<tr><td>${esc(host)}</td><td>${esc(url)}</td><td>${esc(it.note)}</td></tr>`;
+    })
+    .join("");
 }
 
 $("#scan-form").addEventListener("submit", async (e) => {
@@ -229,6 +285,16 @@ $("#demo-btn").addEventListener("click", async () => {
     openScan(created.id);
   } catch (err) {
     alert(err.message);
+  }
+});
+$("#copy-notes").addEventListener("click", async () => {
+  const md = notesMarkdown();
+  try {
+    await navigator.clipboard.writeText(md);
+    $("#copy-notes").textContent = "Kopyalandı";
+    setTimeout(() => { $("#copy-notes").textContent = "Cədvəli kopyala"; }, 1200);
+  } catch (_) {
+    prompt("Kopyala:", md);
   }
 });
 $("#filter").addEventListener("input", () => loadFindings(false));

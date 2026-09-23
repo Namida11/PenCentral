@@ -92,30 +92,46 @@ def screenshot_url(url: str, dest: Path, timeout: int = 25) -> bool:
     chrome = chrome_bin()
     if not chrome or not url:
         return False
+    dest = dest.resolve()
     dest.parent.mkdir(parents=True, exist_ok=True)
     if dest.exists():
         dest.unlink()
-    cmd = [
-        chrome,
-        "--headless=new",
-        "--disable-gpu",
-        "--no-sandbox",
-        "--disable-dev-shm-usage",
-        "--hide-scrollbars",
-        "--ignore-certificate-errors",
-        "--window-size=1366,800",
-        f"--screenshot={dest}",
-        "--virtual-time-budget=8000",
-        url,
+    variants = [
+        [
+            chrome,
+            "--headless=new",
+            "--disable-gpu",
+            "--no-sandbox",
+            "--disable-dev-shm-usage",
+            "--hide-scrollbars",
+            "--ignore-certificate-errors",
+            "--window-size=1366,800",
+            f"--screenshot={dest}",
+            "--virtual-time-budget=10000",
+            "--default-background-color=FFFFFFFF",
+            url,
+        ],
+        [
+            chrome,
+            "--headless",
+            "--disable-gpu",
+            "--no-sandbox",
+            "--window-size=1366,800",
+            f"--screenshot={dest}",
+            url,
+        ],
     ]
-    try:
-        subprocess.run(
-            cmd,
-            timeout=timeout,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        )
-    except subprocess.TimeoutExpired:
-        return False
-    return dest.exists() and dest.stat().st_size > 500
+    for cmd in variants:
+        try:
+            subprocess.run(
+                cmd,
+                timeout=timeout,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            continue
+        if dest.exists() and dest.stat().st_size > 500:
+            return True
+    return False

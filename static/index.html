@@ -82,6 +82,22 @@
 
     <div id="findings" class="list"></div>
 
+    <section class="notes-wrap">
+      <div class="notes-head">
+        <h3>Qeydlər</h3>
+        <button type="button" id="copy-notes" class="ghost">Cədvəli kopyala</button>
+      </div>
+      <p class="muted" id="notes-empty">Subdomain kartında qeyd yaz — burada cədvəl yaranacaq.</p>
+      <div class="table-scroll">
+        <table id="notes-table">
+          <thead>
+            <tr><th>Host</th><th>URL</th><th>Qeyd</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
     <div id="drawer" class="drawer" hidden>
       <div class="drawer-card">
         <button type="button" id="drawer-close" class="ghost">Bağla</button>
