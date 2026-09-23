@@ -163,7 +163,16 @@ main { padding: 22px 28px; overflow: auto; }
   font-size: 12px;
 }
 .card-body { padding: 10px; }
-.card-body a { color: var(--accent); text-decoration: none; word-break: break-all; }
+.host-row {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 8px;
+}
+.note-add { display: flex; gap: 8px; align-items: center; }
+.note-add .note-input { flex: 1; margin-top: 0; }
+.card-body a, .host-row a { color: var(--accent); text-decoration: none; word-break: break-all; }
 .hostline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
