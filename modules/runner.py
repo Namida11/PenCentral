@@ -173,13 +173,6 @@ def _execute(scan_id: int) -> None:
             n = ingest_file(scan_id, "ports", ports)
             db.add_log(scan_id, "ok", f"{n} açıq port")
 
-        if "dirs" in stages:
-            db.update_scan(scan_id, current_stage="dirs")
-            db.add_log(scan_id, "step", "Directory enum")
-            dirs = pipeline.run_dirs(live, outdir, wordlist)
-            n = ingest_file(scan_id, "dirs", dirs)
-            db.add_log(scan_id, "ok", f"{n} directory")
-
         if "source" in stages:
             db.update_scan(scan_id, current_stage="source")
             db.add_log(scan_id, "step", "Source code analiz (hər live subdomain)")
@@ -203,6 +196,28 @@ def _execute(scan_id: int) -> None:
         db.update_scan(scan_id, current_stage="preview")
         db.add_log(scan_id, "step", "URL / IP / status")
         enrich_previews(scan_id, target, outdir, live)
+
+        # Hər statusu olan subdomain ayrıca dir target
+        active_urls = []
+        seen_u = set()
+        for item in db.get_findings(scan_id):
+            if item["category"] not in {"subs", "probe"}:
+                continue
+            if not item.get("http_status"):
+                continue
+            u = (item.get("url") or "").strip()
+            if u and u not in seen_u:
+                seen_u.add(u)
+                active_urls.append(u)
+        if active_urls:
+            write_lines(live, active_urls)
+
+        if "dirs" in stages:
+            db.update_scan(scan_id, current_stage="dirs")
+            db.add_log(scan_id, "step", f"Directory enum · {len(active_urls)} aktiv host")
+            dirs = pipeline.run_dirs(live, outdir, wordlist)
+            n = ingest_file(scan_id, "dirs", dirs)
+            db.add_log(scan_id, "ok", f"{n} directory")
 
         if "nuclei" in stages:
             db.update_scan(scan_id, current_stage="nuclei")

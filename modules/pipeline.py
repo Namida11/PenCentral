@@ -139,79 +139,91 @@ def run_ports(hosts_file: Path, outdir: Path) -> Path:
 
 
 def run_dirs(live_urls: Path, outdir: Path, wordlist: str | None) -> Path:
-    """Directory enum — ffuf üstünlük, yoxdursa feroxbuster."""
+    """Hər aktiv subdomain üçün dirsearch / ffuf / ferox / gobuster."""
     found = outdir / "directories.txt"
-    urls = unique_lines(live_urls)
+    urls = [u.split()[0] for u in unique_lines(live_urls) if u.startswith("http")]
     if not urls:
         write_lines(found, [])
         return found
     if not wordlist or not Path(wordlist).exists():
-        log(
-            "Wordlist yoxdur. --wordlist ver (məs. SecLists common.txt). Dir enum skip.",
-            "warn",
-        )
+        log("Wordlist yoxdur — directory enum skip. SecLists yolu ver.", "warn")
         write_lines(found, [])
         return found
 
     hits: list[str] = []
-    ffuf = require_or_skip("ffuf")
-    if ffuf:
-        for url in urls[:25]:  # ilk 25 live host — şüurlu limit
-            base = url.rstrip("/") + "/FUZZ"
+    tools = {
+        "ffuf": require_or_skip("ffuf"),
+        "dirsearch": require_or_skip("dirsearch"),
+        "feroxbuster": require_or_skip("feroxbuster"),
+        "gobuster": require_or_skip("gobuster"),
+    }
+    present = [k for k, v in tools.items() if v]
+    if not present:
+        log("ffuf/dirsearch/feroxbuster/gobuster yoxdur", "warn")
+        write_lines(found, [])
+        return found
+
+    log(f"Dir enum alətləri: {', '.join(present)} · {len(urls)} target", "step")
+    for url in urls[:40]:
+        base = url.rstrip("/")
+        if tools["ffuf"]:
             raw = outdir / "ffuf_raw.txt"
             proc = run_cmd(
                 [
-                    ffuf,
-                    "-u",
-                    base,
-                    "-w",
-                    wordlist,
-                    "-mc",
-                    "200,204,301,302,307,401,403",
-                    "-t",
-                    "40",
-                    "-timeout",
-                    "8",
-                    "-s",
+                    tools["ffuf"], "-u", base + "/FUZZ", "-w", wordlist,
+                    "-mc", "200,201,204,301,302,307,308,401,403,405,500",
+                    "-t", "30", "-timeout", "8", "-s",
                 ],
                 outfile=raw,
-                timeout=600,
-            )
-            for line in (proc.stdout or "").splitlines():
-                line = line.strip()
-                if line:
-                    hits.append(f"{url} :: {line}")
-        write_lines(found, hits)
-        log(f"ffuf sətirləri: {len(hits)}", "ok")
-        return found
-
-    ferox = require_or_skip("feroxbuster")
-    if ferox:
-        for url in urls[:25]:
-            raw = outdir / "ferox_raw.txt"
-            proc = run_cmd(
-                [
-                    ferox,
-                    "-u",
-                    url,
-                    "-w",
-                    wordlist,
-                    "-q",
-                    "--timeout",
-                    "8",
-                    "-n",
-                ],
-                outfile=raw,
-                timeout=600,
+                timeout=480,
             )
             for line in (proc.stdout or "").splitlines():
                 if line.strip():
-                    hits.append(line.strip())
-        write_lines(found, hits)
-        log(f"feroxbuster sətirləri: {len(hits)}", "ok")
-        return found
+                    hits.append(f"{base} :: ffuf :: {line.strip()}")
+        if tools["dirsearch"]:
+            raw = outdir / "dirsearch_raw.txt"
+            proc = run_cmd(
+                [
+                    tools["dirsearch"], "-u", base, "-w", wordlist,
+                    "--format=plain", "-q", "--timeout=8",
+                ],
+                outfile=raw,
+                timeout=480,
+            )
+            for line in (proc.stdout or "").splitlines():
+                if line.strip() and not line.startswith("#"):
+                    hits.append(f"{base} :: dirsearch :: {line.strip()}")
+        if tools["feroxbuster"]:
+            raw = outdir / "ferox_raw.txt"
+            proc = run_cmd(
+                [
+                    tools["feroxbuster"], "-u", base, "-w", wordlist,
+                    "-q", "--timeout", "8", "-n",
+                    "--status-codes", "200,201,204,301,302,307,401,403,405,500",
+                ],
+                outfile=raw,
+                timeout=480,
+            )
+            for line in (proc.stdout or "").splitlines():
+                if line.strip():
+                    hits.append(f"{base} :: ferox :: {line.strip()}")
+        if tools["gobuster"]:
+            raw = outdir / "gobuster_raw.txt"
+            proc = run_cmd(
+                [
+                    tools["gobuster"], "dir", "-u", base, "-w", wordlist,
+                    "-q", "-t", "30", "--timeout", "8s",
+                    "-s", "200,204,301,302,307,401,403,500",
+                ],
+                outfile=raw,
+                timeout=480,
+            )
+            for line in (proc.stdout or "").splitlines():
+                if line.strip():
+                    hits.append(f"{base} :: gobuster :: {line.strip()}")
 
-    write_lines(found, [])
+    write_lines(found, hits)
+    log(f"Directory hit: {len(hits)}", "ok")
     return found
 
 

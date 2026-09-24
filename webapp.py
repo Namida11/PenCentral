@@ -19,7 +19,7 @@ OUTPUT = ROOT / "output"
 
 STATIC = Path(__file__).resolve().parent / "static"
 VALID_STAGES = {"subs", "probe", "ports", "dirs", "source", "nuclei"}
-TOOLS = ["subfinder", "assetfinder", "httpx", "naabu", "nmap", "ffuf", "feroxbuster", "nuclei"]
+TOOLS = ["subfinder", "assetfinder", "httpx", "naabu", "nmap", "ffuf", "dirsearch", "feroxbuster", "gobuster", "nuclei"]
 MIME = {
     ".html": "text/html; charset=utf-8",
     ".css": "text/css; charset=utf-8",
@@ -120,6 +120,20 @@ class Handler(BaseHTTPRequestHandler):
                 return self._err(400, "id yoxdur")
             db.set_reviewed(fid, bool(body.get("reviewed")), body.get("note"))
             return self._json(200, {"ok": True})
+        if path.startswith("/api/scans/") and path.endswith("/endpoints"):
+            sid = _id_from(path, "/api/scans/", "/endpoints")
+            if sid is None or not db.get_scan(sid):
+                return self._err(404, "Scan yoxdur")
+            raw = str(body.get("url") or body.get("endpoint") or "").strip()
+            if not raw:
+                return self._err(400, "Endpoint boşdur")
+            if not raw.startswith("http"):
+                raw = "https://" + raw.lstrip("/")
+            note = str(body.get("note") or "").strip()
+            fid = db.add_finding(sid, "endpoints", raw, note or "manual", "info", url=raw)
+            if note:
+                db.add_note(fid, note)
+            return self._json(200, {"id": fid, "url": raw})
         if path.startswith("/api/scans/") and path.endswith("/adapt"):
             sid = _id_from(path, "/api/scans/", "/adapt")
             if sid is None or not db.get_scan(sid):

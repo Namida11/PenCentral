@@ -72,6 +72,7 @@
       <button data-cat="probe">Live</button>
       <button data-cat="ports">Port</button>
       <button data-cat="dirs">Directory</button>
+      <button data-cat="endpoints">Endpointlər</button>
       <button data-cat="source">Source</button>
       <button data-cat="nuclei">Nuclei</button>
     </nav>
@@ -80,6 +81,7 @@
       <input id="filter" placeholder="Axtar..." />
       <select id="status-filter">
         <option value="">Status: hamısı</option>
+        <option value="active" selected>Aktiv (status var)</option>
         <option value="200">200</option>
         <option value="301">301</option>
         <option value="302">302</option>
@@ -91,11 +93,21 @@
         <option value="503">503</option>
         <option value="empty">status yox</option>
       </select>
-      <label class="chk"><input type="checkbox" id="only-open" /> Yalnız baxılmamış</label>
+      <label class="chk"><input type="checkbox" id="only-open" /> Yalnız Done olmayan</label>
       <a class="dl" id="dl-txt" href="#" download>Siyahını yüklə (.txt)</a>
       <a class="dl" id="dl-csv" href="#" download>CSV</a>
       <span class="muted" id="count-label"></span>
     </div>
+
+    <section class="ep-wrap">
+      <h3>Endpointlər</h3>
+      <p class="muted">Tapdığın URL-i əlavə et — ayrıca siyahıda saxlanır.</p>
+      <div class="note-add">
+        <input id="ep-url" placeholder="https://api.target.com/v1/users" />
+        <input id="ep-note" placeholder="qeyd (istəyə bağlı)" />
+        <button type="button" id="ep-add" class="ghost slim">Əlavə et</button>
+      </div>
+    </section>
 
     <div id="findings" class="list"></div>
 

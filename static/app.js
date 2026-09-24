@@ -7,14 +7,15 @@ let category = "";
 let pollTimer = null;
 let findingsCache = [];
 let findingsTick = 0;
-let statusFilter = "";
+let statusFilter = "active";
 
-const CATS = ["subs", "probe", "ports", "dirs", "source", "nuclei"];
+const CATS = ["subs", "probe", "ports", "dirs", "endpoints", "source", "nuclei"];
 const CAT_LABEL = {
   subs: "Subdomain",
   probe: "Live",
   ports: "Port",
   dirs: "Directory",
+  endpoints: "Endpoint",
   source: "Source",
   nuclei: "Nuclei",
 };
@@ -155,8 +156,9 @@ async function loadFindings(fromServer = false) {
     if (category && it.category !== category) return false;
     if (statusFilter) {
       const st = statusOf(it);
+      if (statusFilter === "active" && !st) return false;
       if (statusFilter === "empty" && st) return false;
-      if (statusFilter !== "empty" && st !== statusFilter) return false;
+      if (statusFilter !== "empty" && statusFilter !== "active" && st !== statusFilter) return false;
     }
     if (onlyOpen && it.reviewed) return false;
     if (!qtext) return true;
@@ -181,7 +183,7 @@ async function loadFindings(fromServer = false) {
         return `
         <article class="host-row" data-id="${it.id}">
           <div class="hostline">
-            <label class="chk"><input type="checkbox" class="rev" ${it.reviewed ? "checked" : ""} /> baxdım</label>
+            <label class="chk"><input type="checkbox" class="rev" ${it.reviewed ? "checked" : ""} /> Done</label>
             <a class="open" href="${escAttr(url)}" target="_blank" rel="noopener">${esc(host)}</a>
             <span class="code c${esc(code || "0")} c${esc((code || "0")[0])}">${esc(code || "-")}</span>
             <span class="ip">${esc(it.ip || "")}</span>
@@ -370,6 +372,20 @@ $("#copy-notes").addEventListener("click", async () => {
 });
 $("#filter").addEventListener("input", () => loadFindings(false));
 $("#only-open").addEventListener("change", () => loadFindings(false));
+$("#ep-add").addEventListener("click", async () => {
+  if (!currentId) return alert("Əvvəl scan seç");
+  const url = $("#ep-url").value.trim();
+  const note = $("#ep-note").value.trim();
+  if (!url) return;
+  await api(`/api/scans/${currentId}/endpoints`, {
+    method: "POST",
+    body: JSON.stringify({ url, note }),
+  });
+  $("#ep-url").value = "";
+  $("#ep-note").value = "";
+  window.__pcPaint = "";
+  await loadFindings(true);
+});
 $("#status-filter").addEventListener("change", (e) => {
   statusFilter = e.target.value;
   window.__pcPaint = "";
