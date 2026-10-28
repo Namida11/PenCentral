@@ -162,25 +162,36 @@ class SubDeep:
         self.on_log(level, msg)
 
     # ----- passive sources -----
-    def src_crtsh(self) -> None:
-        url = f"https://crt.sh/?q=%25.{self.domain}&output=json"
+    def _crtsh_query(self, name: str, source: str = "crt.sh") -> int:
+        url = f"https://crt.sh/?q=%25.{name}&output=json"
         code, body, _ = _http_get(url, accept="application/json")
         if code != 200 or not body:
-            self._note("crt.sh cavab vermədi", "warn")
-            return
+            return 0
         try:
             rows = json.loads(body)
         except json.JSONDecodeError:
-            self._note("crt.sh JSON parse olunmadı", "warn")
-            return
+            return 0
         n = 0
         for row in rows if isinstance(rows, list) else []:
             for field in ("name_value", "common_name"):
                 val = row.get(field) or ""
                 for part in str(val).splitlines():
-                    self.add(part, "crt.sh")
+                    self.add(part, source)
                     n += 1
-        self._note(f"crt.sh işləndi ({n} sətir)", "ok")
+        return n
+
+    def src_crtsh(self) -> None:
+        n = self._crtsh_query(self.domain)
+        if n:
+            self._note(f"crt.sh işləndi ({n} sətir)", "ok")
+        else:
+            self._note("crt.sh cavab vermədi", "warn")
+
+    def src_crtsh_for(self, host: str) -> None:
+        """Tapılmış subdomain üçün də CT log sorğusu — daha dərin adlar üçün."""
+        if host == self.domain:
+            return
+        self._crtsh_query(host, source=f"crt.sh:{host}")
 
     def src_certspotter(self) -> None:
         url = (
@@ -312,11 +323,29 @@ class SubDeep:
 
     # ----- source / JS crawl -----
     def crawl_source(self, extra_js: list[str] | None = None, max_js: int = 40) -> None:
-        seeds = [
-            f"https://{self.domain}",
-            f"https://www.{self.domain}",
-            f"http://{self.domain}",
-        ]
+        self.crawl_hosts(
+            [self.domain, f"www.{self.domain}"],
+            extra_js=extra_js,
+            max_js=max_js,
+        )
+
+    def crawl_hosts(
+        self,
+        bases: list[str],
+        extra_js: list[str] | None = None,
+        max_js: int = 40,
+    ) -> None:
+        """Verilən hostların HTML/JS/source-map-indən ad və API endpoint çıxarır."""
+        seeds: list[str] = []
+        seen_base: set[str] = set()
+        for b in bases:
+            host = urlparse(b).hostname if "://" in b else b.strip().lower().rstrip("/")
+            host = (host or "").split("/")[0]
+            if not host or host in seen_base:
+                continue
+            seen_base.add(host)
+            seeds.append(f"https://{host}")
+            seeds.append(f"http://{host}")
         js_queue: list[str] = []
         seen_js: set[str] = set()
 
@@ -432,25 +461,66 @@ class SubDeep:
             self.add(f"{token}-dev.{self.domain}", "mutate")
         self._note(f"permutasiya sonrası: {len(self._hits)} ad", "ok")
 
-    def resolve(self, workers: int = 40) -> dict[str, list[str]]:
+    def resolve(self, workers: int = 40, hosts: list[str] | None = None) -> dict[str, list[str]]:
         resolved: dict[str, list[str]] = {}
+        targets = hosts if hosts is not None else self.hosts()
 
         def _res(host: str) -> tuple[str, list[str]]:
             try:
                 infos = socket.getaddrinfo(host, None)
                 ips = sorted({i[4][0] for i in infos})
                 return host, ips
-            except socket.gaierror:
+            except (socket.gaierror, UnicodeError):
                 return host, []
 
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            futs = [pool.submit(_res, h) for h in self.hosts()]
+            futs = [pool.submit(_res, h) for h in targets]
             for fut in as_completed(futs):
                 host, ips = fut.result()
                 if ips:
                     resolved[host] = ips
-        self._note(f"resolve: {len(resolved)}/{len(self._hits)} canlı DNS", "ok")
+        if hosts is None:
+            self._note(f"resolve: {len(resolved)}/{len(self._hits)} canlı DNS", "ok")
         return resolved
+
+    def deep_expand(
+        self,
+        max_rounds: int = 3,
+        per_round: int = 30,
+        max_js: int = 12,
+    ) -> None:
+        """Rekursiv genişlənmə: tapılan hər canlı subdomaini yeni seed kimi götürüb
+        onun üçün də CT log sorğusu edir və HTML/JS/backend-API mənbəyini gəzir.
+
+        Yalnız DNS-də real olan (resolve olunan) hostlar genişləndirilir ki,
+        sonsuz/mənasız sorğu olmasın. per_round və max_rounds ilə məhdudlaşır.
+        """
+        processed: set[str] = {self.domain}
+        for rnd in range(1, max_rounds + 1):
+            pending = [h for h in self.hosts() if h not in processed]
+            if not pending:
+                break
+            resolved = self.resolve(hosts=pending)
+            fresh = [h for h in pending if h in resolved]
+            # resolve olunmayanları da "işləndi" say ki, təkrar yoxlanmasın
+            processed.update(pending)
+            if not fresh:
+                self._note(f"deep round {rnd}: yeni canlı host yoxdur", "ok")
+                break
+            batch = fresh[:per_round]
+            before = len(self._hits)
+            self._note(
+                f"deep round {rnd}: {len(batch)} canlı host genişləndirilir "
+                f"(resolve olunan {len(fresh)})",
+                "step",
+            )
+            with ThreadPoolExecutor(max_workers=6) as pool:
+                list(pool.map(self.src_crtsh_for, batch))
+            self.crawl_hosts(batch, max_js=max_js)
+            gained = len(self._hits) - before
+            self._note(f"deep round {rnd}: +{gained} yeni ad", "ok")
+            if gained == 0:
+                break
 
 
 def run_subdeep(
@@ -462,6 +532,8 @@ def run_subdeep(
     resolve: bool = False,
     use_local_tools: bool = True,
     max_js: int = 40,
+    deep: bool = False,
+    deep_rounds: int = 3,
 ) -> Path:
     engine = SubDeep(domain)
     engine._note(f"SubDeep start: {domain}", "step")
@@ -494,6 +566,9 @@ def run_subdeep(
 
     if crawl:
         engine.crawl_source(extra_js=wayback_js[:25], max_js=max_js)
+
+    if deep:
+        engine.deep_expand(max_rounds=deep_rounds, max_js=max(6, max_js // 2))
 
     if mutate:
         engine.mutate()

@@ -25,6 +25,12 @@ def main() -> None:
     p.add_argument("--mutate", action="store_true", help="tapılan tokenlərdən kiçik permutasiya")
     p.add_argument("--resolve", action="store_true", help="DNS resolve et")
     p.add_argument("--max-js", type=int, default=40, help="maksimum JS/source fayl")
+    p.add_argument(
+        "--deep",
+        action="store_true",
+        help="rekursiv: tapılan subdomainləri yeni seed kimi genişlət (CT + source)",
+    )
+    p.add_argument("--deep-rounds", type=int, default=3, help="deep rejimdə raund sayı")
     args = p.parse_args()
 
     domain = args.domain.strip().lower().removeprefix("https://").removeprefix("http://")
@@ -43,6 +49,8 @@ def main() -> None:
         resolve=args.resolve,
         use_local_tools=not args.no_tools,
         max_js=args.max_js,
+        deep=args.deep,
+        deep_rounds=args.deep_rounds,
     )
     log(f"Siyahı: {path}", "ok")
     log(f"Mənbə xəritəsi: {out / 'subdomains_by_source.json'}", "ok")

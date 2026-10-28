@@ -17,6 +17,8 @@ def run_subdomains(domain: str, outdir: Path) -> Path:
         resolve=False,
         use_local_tools=True,
         max_js=12,
+        deep=True,
+        deep_rounds=3,
     )
 
 
