@@ -273,7 +273,7 @@ def _id_from(path: str, prefix: str, suffix: str) -> int | None:
 
 def main() -> None:
     db.init()
-    host, port = "127.0.0.1", 8080
+    host, port = "127.0.0.1", 9000
     httpd = ThreadingHTTPServer((host, port), Handler)
     print(f"PenCentral UI → http://{host}:{port}")
     print("Yalnız icazəli target. Ctrl+C ilə dayan.")
