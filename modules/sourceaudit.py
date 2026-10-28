@@ -229,7 +229,16 @@ RULES: list[tuple[str, str, re.Pattern[str]]] = [
         "Generic API key assignment",
         "medium",
         re.compile(
-            r"""(?:api[_-]?key|apikey|access[_-]?key|secret[_-]?key|client[_-]?secret|private[_-]?key|auth[_-]?token|access[_-]?token)\s*[:=]\s*['"][A-Za-z0-9_\-/.+=]{12,}['"]""",
+            r"""(?:x[_-]?api[_-]?key|api[_-]?key|apikey|access[_-]?key|secret[_-]?key|client[_-]?secret|private[_-]?key|auth[_-]?token|access[_-]?token|app[_-]?secret|app[_-]?key|consumer[_-]?secret)\s*[:=]\s*['"][A-Za-z0-9_\-/.+=]{8,}['"]""",
+            re.I,
+        ),
+    ),
+    (
+        "API key in URL / header",
+        "medium",
+        re.compile(
+            r"""(?:[?&](?:x[_-]?api[_-]?key|api[_-]?key|apikey|access[_-]?token|auth[_-]?token|token|key)=[A-Za-z0-9_\-.]{8,})"""
+            r"""|(?:["']x-api-key["']\s*:\s*["'][^"']{8,}["'])""",
             re.I,
         ),
     ),
@@ -243,9 +252,30 @@ RULES: list[tuple[str, str, re.Pattern[str]]] = [
         "Password assignment",
         "high",
         re.compile(
-            r"""(?:password|passwd|pwd|db_pass|db_password)\s*[:=]\s*['"][^'"]{4,}['"]""",
+            r"""(?:password|passwd|pwd|pass|db_pass|db_password|credential|credentials|secret)\s*[:=]\s*['"][^'"]{4,}['"]""",
             re.I,
         ),
+    ),
+    (
+        "Username / login",
+        "medium",
+        re.compile(
+            r"""(?:username|user_name|user[_-]?id|userid|login|db_user|db_username|db_user_name)\s*[:=]\s*['"][^'"]{2,}['"]""",
+            re.I,
+        ),
+    ),
+    (
+        "DB config (host/user/name/key)",
+        "high",
+        re.compile(
+            r"""(?:db[_-]?host|db[_-]?name|db[_-]?user|db[_-]?key|database[_-]?url|database[_-]?host|database[_-]?name|dbhost|dbname|dbuser|dbpass)\s*[:=]\s*['"][^'"]+['"]""",
+            re.I,
+        ),
+    ),
+    (
+        "Credentials in URL (user:pass@host)",
+        "critical",
+        re.compile(r"[a-z][a-z0-9+.\-]*://[^/\s:@'\"]+:[^/\s:@'\"]+@[^/\s'\"]+", re.I),
     ),
     (
         "Bearer / Authorization",

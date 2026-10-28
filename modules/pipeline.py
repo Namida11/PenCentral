@@ -4,6 +4,21 @@ from pathlib import Path
 
 from .utils import log, require_or_skip, run_cmd, unique_lines, write_lines
 
+# Directory enum zamanı qovluqla yanaşı fayl adları da yoxlanır.
+# İstifadəçi xüsusi olaraq istədi: sql, gz, txt, js — üstəlik klassik
+# backup/config/secret uzantıları.
+DIR_EXTS = [
+    "sql", "gz", "tar.gz", "zip", "tar", "bak", "old", "txt", "js",
+    "json", "xml", "env", "conf", "config", "log", "db", "bkp", "7z",
+]
+
+
+def _ext_variants(dotted: bool) -> str:
+    """ffuf nöqtəli (.sql,.gz) gözləyir; dirsearch/ferox/gobuster nöqtəsiz (sql,gz)."""
+    if dotted:
+        return ",".join("." + e for e in DIR_EXTS)
+    return ",".join(DIR_EXTS)
+
 
 def run_subdomains(domain: str, outdir: Path) -> Path:
     """SubDeep: CT, arxiv, JS/source, sourcemap + lokal alətlər."""
@@ -165,7 +180,13 @@ def run_dirs(live_urls: Path, outdir: Path, wordlist: str | None) -> Path:
         write_lines(found, [])
         return found
 
-    log(f"Dir enum alətləri: {', '.join(present)} · {len(urls)} target", "step")
+    exts_dot = _ext_variants(dotted=True)
+    exts_plain = _ext_variants(dotted=False)
+    log(
+        f"Dir enum alətləri: {', '.join(present)} · {len(urls)} target · "
+        f"uzantılar: {exts_plain}",
+        "step",
+    )
     for url in urls[:40]:
         base = url.rstrip("/")
         if tools["ffuf"]:
@@ -173,11 +194,12 @@ def run_dirs(live_urls: Path, outdir: Path, wordlist: str | None) -> Path:
             proc = run_cmd(
                 [
                     tools["ffuf"], "-u", base + "/FUZZ", "-w", wordlist,
+                    "-e", exts_dot,
                     "-mc", "200,201,204,301,302,307,308,401,403,405,500",
                     "-t", "30", "-timeout", "8", "-s",
                 ],
                 outfile=raw,
-                timeout=480,
+                timeout=600,
             )
             for line in (proc.stdout or "").splitlines():
                 if line.strip():
@@ -187,10 +209,10 @@ def run_dirs(live_urls: Path, outdir: Path, wordlist: str | None) -> Path:
             proc = run_cmd(
                 [
                     tools["dirsearch"], "-u", base, "-w", wordlist,
-                    "--format=plain", "-q", "--timeout=8",
+                    "-e", exts_plain, "--format=plain", "-q", "--timeout=8",
                 ],
                 outfile=raw,
-                timeout=480,
+                timeout=600,
             )
             for line in (proc.stdout or "").splitlines():
                 if line.strip() and not line.startswith("#"):
@@ -200,11 +222,12 @@ def run_dirs(live_urls: Path, outdir: Path, wordlist: str | None) -> Path:
             proc = run_cmd(
                 [
                     tools["feroxbuster"], "-u", base, "-w", wordlist,
+                    "-x", exts_plain,
                     "-q", "--timeout", "8", "-n",
                     "--status-codes", "200,201,204,301,302,307,401,403,405,500",
                 ],
                 outfile=raw,
-                timeout=480,
+                timeout=600,
             )
             for line in (proc.stdout or "").splitlines():
                 if line.strip():
@@ -214,11 +237,12 @@ def run_dirs(live_urls: Path, outdir: Path, wordlist: str | None) -> Path:
             proc = run_cmd(
                 [
                     tools["gobuster"], "dir", "-u", base, "-w", wordlist,
+                    "-x", exts_plain,
                     "-q", "-t", "30", "--timeout", "8s",
                     "-s", "200,204,301,302,307,401,403,500",
                 ],
                 outfile=raw,
-                timeout=480,
+                timeout=600,
             )
             for line in (proc.stdout or "").splitlines():
                 if line.strip():
