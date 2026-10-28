@@ -98,6 +98,7 @@ async function openScan(id) {
   window.__pcPaint = "";
   $("#logs").textContent = "";
   $("#dl-txt").href = `/api/scans/${id}/export.txt`;
+  $("#dl-live").href = `/api/scans/${id}/export-live.txt`;
   $("#dl-csv").href = `/api/scans/${id}/export.csv`;
   await refreshScan();
   await loadScans();

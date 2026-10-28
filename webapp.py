@@ -76,6 +76,9 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith("/api/scans/") and path.endswith("/export.txt"):
             sid = _id_from(path, "/api/scans/", "/export.txt")
             return self._export(sid, "txt")
+        if path.startswith("/api/scans/") and path.endswith("/export-live.txt"):
+            sid = _id_from(path, "/api/scans/", "/export-live.txt")
+            return self._export(sid, "live")
         if path.startswith("/api/scans/") and path.endswith("/export.csv"):
             sid = _id_from(path, "/api/scans/", "/export.csv")
             return self._export(sid, "csv")
@@ -187,30 +190,57 @@ class Handler(BaseHTTPRequestHandler):
         start_scan(scan_id)
         self._json(200, {"id": scan_id})
 
+    def _subdomain_table(self, sid: int) -> dict:
+        """host -> {status, url, ip}. subs + probe tapıntılarını host üzrə birləşdirir,
+        status kodu olan sətri üstün tutur ki, canlı host "boş" görünməsin."""
+        agg: dict[str, dict] = {}
+        for r in db.get_findings(sid):
+            if r["category"] not in {"subs", "probe"}:
+                continue
+            host = host_from(r.get("url") or r["title"])
+            if not host:
+                continue
+            status = str(r.get("http_status") or "").strip()
+            cur = agg.get(host)
+            if cur is None:
+                agg[host] = {
+                    "status": status,
+                    "url": r.get("url") or "",
+                    "ip": r.get("ip") or "",
+                }
+            else:
+                if status and not cur["status"]:
+                    cur["status"] = status
+                    cur["url"] = r.get("url") or cur["url"]
+                if not cur["ip"] and r.get("ip"):
+                    cur["ip"] = r.get("ip")
+        return agg
+
     def _export(self, sid: int | None, kind: str) -> None:
         if sid is None or not db.get_scan(sid):
             return self._err(404, "Scan yoxdur")
-        rows = db.get_findings(sid, "subs")
-        if not rows:
-            rows = [f for f in db.get_findings(sid) if f["category"] in {"subs", "probe"}]
+        agg = self._subdomain_table(sid)
         if kind == "csv":
-            lines = ["host,url,ip,sources_or_detail"]
-            for r in rows:
-                host = host_from(r.get("url") or r["title"])
-                lines.append(
-                    f"{host},{r.get('url') or ''},{r.get('ip') or ''},{(r.get('detail') or '').replace(',', ' ')}"
-                )
+            # cədvələ çevriləbilən format: host, status, url, ip
+            lines = ["host,status,url,ip"]
+            for host in sorted(agg):
+                row = agg[host]
+                # vergülü sütun ayırıcısı ilə qarışdırma — IP siyahısı vergüllü ola bilər
+                ip = row["ip"].replace(",", ";").replace(" ", "")
+                url = row["url"].replace(",", "")
+                lines.append(f"{host},{row['status']},{url},{ip}")
             body = ("\n".join(lines) + "\n").encode("utf-8")
             ctype = "text/csv; charset=utf-8"
             name = f"subdomains-{sid}.csv"
+        elif kind == "live":
+            # yalnız cavab verən (status kodu olan) hostlar
+            hosts = [f"{h} {agg[h]['status']}" for h in sorted(agg) if agg[h]["status"]]
+            body = ("\n".join(hosts) + "\n").encode("utf-8")
+            ctype = "text/plain; charset=utf-8"
+            name = f"subdomains-live-{sid}.txt"
         else:
-            hosts = []
-            seen = set()
-            for r in rows:
-                host = host_from(r.get("url") or r["title"])
-                if host and host not in seen:
-                    seen.add(host)
-                    hosts.append(host)
+            # tam siyahı — bütün tapılan subdomainlər
+            hosts = sorted(agg)
             body = ("\n".join(hosts) + "\n").encode("utf-8")
             ctype = "text/plain; charset=utf-8"
             name = f"subdomains-{sid}.txt"
